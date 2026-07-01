@@ -57,14 +57,14 @@ REACTOME_GMT="${PROJECT_DIR}/pathways/c2.cp.reactome.v2026.1.Hs.entrez.gmt"
 # -----------------------------------------------------------------------------
 
 # Height
-#GENE_RAW="${RESULTS_DIR}/HT_EUR_2022_genes.genes.raw"
-#GO_OUT="${RESULTS_DIR}/HT_EUR_2022_GO"
-#REACTOME_OUT="${RESULTS_DIR}/HT_EUR_2022_Reactome"
+GENE_RAW="${RESULTS_DIR}/HT_EUR_2022_genes.genes.raw"
+GO_OUT="${RESULTS_DIR}/HT_EUR_2022_GO"
+REACTOME_OUT="${RESULTS_DIR}/HT_EUR_2022_Reactome"
 
 # BMI
-GENE_RAW="${RESULTS_DIR}/BMI_EUR_2018_genes.genes.raw"
-GO_OUT="${RESULTS_DIR}/BMI_EUR_2018_GO"
-REACTOME_OUT="${RESULTS_DIR}/BMI_EUR_2018_Reactome"
+#GENE_RAW="${RESULTS_DIR}/BMI_EUR_2018_genes.genes.raw"
+#GO_OUT="${RESULTS_DIR}/BMI_EUR_2018_GO"
+#REACTOME_OUT="${RESULTS_DIR}/BMI_EUR_2018_Reactome"
 
 RUN_GO=true
 RUN_REACTOME=true
