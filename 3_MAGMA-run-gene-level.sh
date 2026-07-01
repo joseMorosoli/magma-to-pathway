@@ -14,6 +14,7 @@
 # Intended use:
 #   Submit to Myriad with:
 #     qsub scripts/3_MAGMA-run-gene-level.sh
+#   It can also be run interactively after editing the USER SETTINGS block.
 #
 # Required input:
 #   - MAGMA executable
@@ -27,9 +28,16 @@
 #   <GENE_OUT>.log
 #
 # To switch trait, edit only MUNGED_FILE and GENE_OUT in USER SETTINGS.
+#
+# No-exit mode:
+#   Checks print WARNING and skip the MAGMA command rather than terminating the shell.
+#   This prevents accidental logout if the script is sourced interactively.
+#   For submitted jobs, read the log carefully because warnings may not mark the
+#   job as failed to the scheduler.
 # ============================================================================
 
-set -euo pipefail
+set +e
+set -o pipefail
 
 # ---------------------------------------------------------------------------
 # USER SETTINGS: edit these two lines for each trait.
@@ -60,6 +68,12 @@ OVERWRITE="TRUE"
 
 mkdir -p "$RESULTS_DIR" "$LOG_DIR"
 
+CAN_RUN=true
+
+# ---------------------------------------------------------------------------
+# Checks
+# ---------------------------------------------------------------------------
+
 echo "============================================================"
 echo "MAGMA gene-level analysis"
 echo "Job ID:      ${JOB_ID:-not_available}"
@@ -68,10 +82,6 @@ echo "Start time:  $(date)"
 echo "Munged file: $MUNGED_FILE"
 echo "Output:      $GENE_OUT"
 echo "============================================================"
-
-# ---------------------------------------------------------------------------
-# Checks
-# ---------------------------------------------------------------------------
 
 for file in \
   "$MAGMA_EXE" \
@@ -82,68 +92,82 @@ for file in \
   "$GENE_ANNOT"
 do
   if [[ ! -e "$file" ]]; then
-    echo "ERROR: required file not found: $file" >&2
-    exit 1
+    echo "WARNING: required file not found: $file" >&2
+    CAN_RUN=false
   fi
 done
 
-if [[ ! -x "$MAGMA_EXE" ]]; then
-  echo "ERROR: MAGMA is not executable: $MAGMA_EXE" >&2
-  echo "Fix with: chmod +x \"$MAGMA_EXE\"" >&2
-  exit 1
+if [[ -e "$MAGMA_EXE" && ! -x "$MAGMA_EXE" ]]; then
+  echo "WARNING: MAGMA is not executable: $MAGMA_EXE" >&2
+  echo "WARNING: Fix with: chmod +x \"$MAGMA_EXE\"" >&2
+  CAN_RUN=false
 fi
 
-HEADER_FIELDS=$(
-  head -n 1 "$MUNGED_FILE" |
-    tr -d '\r' |
-    tr '\t ,' '\n' |
-    sed '/^$/d'
-)
+if [[ -s "$MUNGED_FILE" ]]; then
+  HEADER_FIELDS=$(head -n 1 "$MUNGED_FILE" | tr -d '\r' | tr '\t ,' '\n' | sed '/^$/d')
 
-for col in SNP P N; do
-  if ! grep -Fxq "$col" <<< "$HEADER_FIELDS"; then
-    echo "ERROR: required column '$col' not found in $MUNGED_FILE" >&2
-    echo "Observed header:" >&2
-    head -n 1 "$MUNGED_FILE" | cat -A >&2
-    exit 1
-  fi
-done
+  for col in SNP P N; do
+    if ! grep -Fxq "$col" <<< "$HEADER_FIELDS"; then
+      echo "WARNING: required column '$col' not found in $MUNGED_FILE" >&2
+      echo "WARNING: Observed header: $(head -n 1 "$MUNGED_FILE" | cat -A)" >&2
+      CAN_RUN=false
+    fi
+  done
+else
+  echo "WARNING: cannot check header because MUNGED_FILE is missing or empty: $MUNGED_FILE" >&2
+  CAN_RUN=false
+fi
 
 if [[ "$OVERWRITE" == "TRUE" ]]; then
-  rm -f "${GENE_OUT}".*
+  if [[ "$CAN_RUN" == true ]]; then
+    rm -f "${GENE_OUT}".*
+  fi
 elif compgen -G "${GENE_OUT}.*" > /dev/null; then
-  echo "ERROR: output files already exist for prefix: $GENE_OUT" >&2
-  echo "Set OVERWRITE=TRUE or choose a new GENE_OUT prefix." >&2
-  exit 1
+  echo "WARNING: output files already exist for prefix: $GENE_OUT" >&2
+  echo "WARNING: Set OVERWRITE=TRUE or choose a new GENE_OUT prefix. Skipping MAGMA." >&2
+  CAN_RUN=false
 fi
 
 # ---------------------------------------------------------------------------
 # Run MAGMA gene-level analysis
 # ---------------------------------------------------------------------------
 
-"$MAGMA_EXE" \
-  --bfile "$REFERENCE_PREFIX" \
-  --pval "$MUNGED_FILE" ncol=N \
-  --gene-annot "$GENE_ANNOT" \
-  --out "$GENE_OUT"
+if [[ "$CAN_RUN" == true ]]; then
+  "$MAGMA_EXE" \
+    --bfile "$REFERENCE_PREFIX" \
+    --pval "$MUNGED_FILE" ncol=N \
+    --gene-annot "$GENE_ANNOT" \
+    --out "$GENE_OUT"
 
-# ---------------------------------------------------------------------------
-# Final checks
-# ---------------------------------------------------------------------------
+  MAGMA_STATUS=$?
 
-if [[ ! -s "${GENE_OUT}.genes.raw" ]]; then
-  echo "ERROR: MAGMA did not create ${GENE_OUT}.genes.raw" >&2
-  exit 1
+  if [[ "$MAGMA_STATUS" -ne 0 ]]; then
+    echo "WARNING: MAGMA gene-level command returned non-zero status: $MAGMA_STATUS" >&2
+  fi
+
+  # -------------------------------------------------------------------------
+  # Final checks
+  # -------------------------------------------------------------------------
+
+  if [[ ! -s "${GENE_OUT}.genes.raw" ]]; then
+    echo "WARNING: MAGMA did not create a non-empty file: ${GENE_OUT}.genes.raw" >&2
+  fi
+
+  if [[ ! -s "${GENE_OUT}.genes.out" ]]; then
+    echo "WARNING: MAGMA did not create a non-empty file: ${GENE_OUT}.genes.out" >&2
+  fi
+
+  if [[ -s "${GENE_OUT}.genes.raw" && -s "${GENE_OUT}.genes.out" ]]; then
+    echo "MAGMA gene-level analysis completed successfully."
+    echo "Created:"
+    echo "  ${GENE_OUT}.genes.raw"
+    echo "  ${GENE_OUT}.genes.out"
+    echo "  ${GENE_OUT}.log"
+  else
+    echo "WARNING: MAGMA gene-level analysis did not produce all expected outputs." >&2
+  fi
+else
+  echo "WARNING: Skipping MAGMA gene-level analysis because one or more checks failed." >&2
 fi
 
-if [[ ! -s "${GENE_OUT}.genes.out" ]]; then
-  echo "ERROR: MAGMA did not create ${GENE_OUT}.genes.out" >&2
-  exit 1
-fi
-
-echo "MAGMA gene-level analysis completed successfully."
-echo "Created:"
-echo "  ${GENE_OUT}.genes.raw"
-echo "  ${GENE_OUT}.genes.out"
-echo "  ${GENE_OUT}.log"
 echo "End time: $(date)"

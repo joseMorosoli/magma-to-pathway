@@ -19,9 +19,14 @@
 # Current project convention:
 #   Genome build: GRCh37
 #   Window: 35 kb upstream, 10 kb downstream
+#
+# No-exit mode:
+#   Checks print WARNING and skip the MAGMA command rather than terminating the shell.
+#   This prevents accidental logout if the script is sourced interactively.
 # ============================================================================
 
-set -euo pipefail
+set +e
+set -o pipefail
 
 # ---------------------------------------------------------------------------
 # USER SETTINGS
@@ -40,43 +45,51 @@ DOWNSTREAM_KB=10
 # Checks
 # ---------------------------------------------------------------------------
 
+CAN_RUN=true
+
 for file in "$MAGMA_EXE" "$REFERENCE_BIM" "$GENE_LOC"; do
   if [[ ! -e "$file" ]]; then
-    echo "ERROR: required file not found: $file" >&2
-    exit 1
+    echo "WARNING: required file not found: $file" >&2
+    CAN_RUN=false
   fi
 done
 
-if [[ ! -x "$MAGMA_EXE" ]]; then
-  echo "ERROR: MAGMA is not executable: $MAGMA_EXE" >&2
-  echo "Fix with: chmod +x \"$MAGMA_EXE\"" >&2
-  exit 1
+if [[ -e "$MAGMA_EXE" && ! -x "$MAGMA_EXE" ]]; then
+  echo "WARNING: MAGMA is not executable: $MAGMA_EXE" >&2
+  echo "WARNING: Fix with: chmod +x \"$MAGMA_EXE\"" >&2
+  CAN_RUN=false
 fi
 
 mkdir -p "$(dirname "$OUT_PREFIX")"
 
-echo "Creating MAGMA gene annotation"
-echo "MAGMA:        $MAGMA_EXE"
-echo "Reference BIM:$REFERENCE_BIM"
-echo "Gene loc:     $GENE_LOC"
-echo "Output prefix:$OUT_PREFIX"
-echo "Window:       ${UPSTREAM_KB}kb upstream, ${DOWNSTREAM_KB}kb downstream"
-echo "Start time:   $(date)"
+if [[ "$CAN_RUN" == true ]]; then
+  echo "Creating MAGMA gene annotation"
+  echo "MAGMA:        $MAGMA_EXE"
+  echo "Reference BIM:$REFERENCE_BIM"
+  echo "Gene loc:     $GENE_LOC"
+  echo "Output prefix:$OUT_PREFIX"
+  echo "Window:       ${UPSTREAM_KB}kb upstream, ${DOWNSTREAM_KB}kb downstream"
+  echo "Start time:   $(date)"
 
-# ---------------------------------------------------------------------------
-# Run MAGMA annotation
-# ---------------------------------------------------------------------------
+  "$MAGMA_EXE" \
+    --annotate window=${UPSTREAM_KB},${DOWNSTREAM_KB} \
+    --snp-loc "$REFERENCE_BIM" \
+    --gene-loc "$GENE_LOC" \
+    --out "$OUT_PREFIX"
 
-"$MAGMA_EXE" \
-  --annotate window=${UPSTREAM_KB},${DOWNSTREAM_KB} \
-  --snp-loc "$REFERENCE_BIM" \
-  --gene-loc "$GENE_LOC" \
-  --out "$OUT_PREFIX"
+  MAGMA_STATUS=$?
 
-if [[ ! -s "${OUT_PREFIX}.genes.annot" ]]; then
-  echo "ERROR: MAGMA did not create ${OUT_PREFIX}.genes.annot" >&2
-  exit 1
+  if [[ "$MAGMA_STATUS" -ne 0 ]]; then
+    echo "WARNING: MAGMA annotation command returned non-zero status: $MAGMA_STATUS" >&2
+  fi
+
+  if [[ ! -s "${OUT_PREFIX}.genes.annot" ]]; then
+    echo "WARNING: MAGMA did not create a non-empty annotation file: ${OUT_PREFIX}.genes.annot" >&2
+  else
+    echo "Created: ${OUT_PREFIX}.genes.annot"
+  fi
+
+  echo "End time: $(date)"
+else
+  echo "WARNING: Skipping MAGMA annotation because one or more required checks failed." >&2
 fi
-
-echo "Created: ${OUT_PREFIX}.genes.annot"
-echo "End time: $(date)"

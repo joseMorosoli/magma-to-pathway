@@ -19,7 +19,7 @@ The current positive-control examples are height and BMI. The scripts are delibe
 3_MAGMA-run-gene-level.sh
     MAGMA-ready summary statistics + .genes.annot -> .genes.raw and .genes.out
 
-4_run-MAGMA-pathways.R
+4_run-MAGMA-pathways.sh
     .genes.raw + pathway .gmt files -> MAGMA .gsa.out pathway results
 
 5_extract-sig-pathways.R
@@ -164,10 +164,10 @@ The `.genes.raw` file is the input for pathway analysis.
 Run after `.genes.raw` exists:
 
 ```bash
-Rscript scripts/4_run-MAGMA-pathways.R
+qsub scripts/4_run-MAGMA-pathways.sh
 ```
 
-This runs GO and Reactome as separate MAGMA gene-set analyses. It does **not** rerun the gene-level step.
+This submits GO and Reactome as separate MAGMA gene-set analyses within one Myriad job. It does **not** rerun the gene-level step.
 
 Outputs:
 
@@ -252,3 +252,23 @@ MAGMA gene-set results are competitive pathway-level statistical tests based on 
 Pathway-based PGS/PRSet-style analyses produce individual-level genetic liability scores restricted to defined gene sets or pathways. Their interpretation depends on pathway definition, LD, ancestry, SNP-to-gene mapping, sample size, p-value thresholding and covariate structure.
 
 Positive-control traits such as height and BMI are useful for checking that the pipeline behaves sensibly, but results still depend on GWAS power, ancestry matching, phenotype measurement and sample overlap.
+
+## No-exit Bash behaviour
+
+The Bash scripts in this repository are currently written in **no-exit mode**. Failed checks print `WARNING:` messages and skip unsafe analysis commands rather than terminating the shell. This is intentional for interactive Myriad work, especially if a script is accidentally sourced rather than executed.
+
+Important trade-off: this is safer for an interactive shell, but less strict for submitted jobs. A Myriad job may finish without scheduler failure even if the analysis was skipped. Always inspect the scheduler log and confirm that the expected output files were created and are non-empty.
+
+Recommended usage remains:
+
+```bash
+bash scripts/2_create-annotation-file.sh
+qsub scripts/3_MAGMA-run-gene-level.sh
+qsub scripts/4_run-MAGMA-pathways.sh
+```
+
+Avoid sourcing these scripts with `source script.sh` unless you are deliberately running them line by line.
+
+## Interactive Myriad note
+
+The Bash scripts deliberately avoid custom Bash helper functions such as `warn()`. Warnings are printed using plain `echo "WARNING: ..." >&2` statements. This makes the scripts easier to run line-by-line in an interactive Myriad session without needing to define helper functions first.
