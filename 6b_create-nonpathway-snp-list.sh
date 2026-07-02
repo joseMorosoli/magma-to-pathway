@@ -26,17 +26,19 @@ set +e
 set -o pipefail
 
 module -f unload compilers mpi gcc-libs
-module load r/recommended
+module load r/4.5.1-openblas/gnu-10.2.0
 
-export R_LIBS="/myriadfs/home/ucju659/MyRLibs/"
+unset R_LIBS
+export R_LIBS_USER="/myriadfs/home/ucju659/MyRLibs/R-4.5.1"
 
 PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 
 # Choose one trait.
-# TRAIT_PREFIX="HT_EUR_2022"
-TRAIT_PREFIX="BMI_EUR_2018"
+TRAIT_PREFIX="HT_EUR_2022"
+#TRAIT_PREFIX="BMI_EUR_2018"
 
-SELECTION="FDR05"
+# Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
+SELECTION="Bonferroni05"
 
 SELECTED_GMT="${PROJECT_DIR}/pathways/selected/${TRAIT_PREFIX}_selected_${SELECTION}_GO_Reactome.symbols.gmt"
 OUTDIR="${PROJECT_DIR}/pathways/selected/${TRAIT_PREFIX}_selected_${SELECTION}_nonpathway"
@@ -50,6 +52,7 @@ DOWNSTREAM_BP="10000"
 mkdir -p "${OUTDIR}"
 
 CAN_RUN=true
+
 
 if [[ ! -f "${SELECTED_GMT}" ]]; then
   echo "WARNING: selected GMT not found: ${SELECTED_GMT}" >&2
@@ -70,13 +73,22 @@ if [[ "${CAN_RUN}" != true ]]; then
   echo "WARNING: skipping non-pathway SNP list creation because an input is missing." >&2
 else
   export SELECTED_GMT OUTDIR TARGET_BIM GTF UPSTREAM_BP DOWNSTREAM_BP TRAIT_PREFIX SELECTION
+fi
 
-  Rscript --vanilla - <<'RSCRIPT'
+R --vanilla
+
+suppressPackageStartupMessages({.libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))
+
+cat("R version:", as.character(getRversion()), "\n")
+cat("R library paths:\n")
+print(.libPaths())
+
 suppressPackageStartupMessages({
   library(data.table)
   library(GenomicRanges)
   library(GenomeInfoDb)
   library(rtracklayer)
+})
 })
 
 selected_gmt <- Sys.getenv("SELECTED_GMT")
@@ -115,7 +127,13 @@ cat("Pathways in GMT:", length(pathways), "\n")
 cat("Unique pathway genes in GMT:", length(pathway_genes), "\n")
 
 bim <- fread(target_bim, header = FALSE)
+
+if (ncol(bim) < 6) {
+  stop("Target BIM has fewer than 6 columns: ", target_bim)
+}
+
 setnames(bim, c("CHR", "SNP", "CM", "BP", "A1", "A2"))
+
 bim <- bim[as.character(CHR) %in% as.character(1:22)]
 bim[, CHR := as.character(CHR)]
 bim[, BP := as.integer(BP)]
@@ -218,5 +236,4 @@ cat(nonpath_file, "\n")
 cat(meta_file, "\n")
 cat(genes_file, "\n")
 cat(genes_in_gtf_file, "\n")
-RSCRIPT
-fi
+
