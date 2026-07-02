@@ -39,10 +39,10 @@ results_dir <- "/myriadfs/home/ucju659/SOFTWARE/MAGMA/results"
 # Choose trait by uncommenting one block.
 
 # Height
-trait_prefix <- "HT_EUR_2022"
+#trait_prefix <- "HT_EUR_2022"
 
 # BMI
-#trait_prefix <- "BMI_EUR_2018"
+trait_prefix <- "BMI_EUR_2018"
 
 
 # Choose which pathway collections to process.
