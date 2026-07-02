@@ -23,9 +23,11 @@ set +e
 set -o pipefail
 
 module -f unload compilers mpi gcc-libs
-module load r/recommended
+module load r/4.5.1-openblas/gnu-10.2.0
+#module load r/recommended
 
-export R_LIBS="/myriadfs/home/ucju659/MyRLibs/"
+unset R_LIBS
+export R_LIBS_USER="/myriadfs/home/ucju659/MyRLibs/R-4.5.1"
 
 export OPENBLAS_NUM_THREADS=1
 export OMP_NUM_THREADS=1
@@ -33,15 +35,16 @@ export MKL_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
-export THREADS="${NSLOTS:-4}"
+export THREADS="${NSLOTS:-2}"
 
 PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 
 # Choose one trait.
-# TRAIT_PREFIX="HT_EUR_2022"
-TRAIT_PREFIX="BMI_EUR_2018"
+TRAIT_PREFIX="HT_EUR_2022"
+#TRAIT_PREFIX="BMI_EUR_2018"
 
-SELECTION="FDR05"
+# Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
+SELECTION="Bonferroni05"
 
 export SELECTED_GMT="${PROJECT_DIR}/pathways/selected/${TRAIT_PREFIX}_selected_${SELECTION}_GO_Reactome.symbols.gmt"
 export BIGSNP_RDS="/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS/MCS_topmed_EUR_KING_QCd_rsID_PCs_SD4-hapmap-only.rds"
@@ -49,10 +52,10 @@ export GTF="/myriadfs/home/ucju659/misc/ANNOTATIONS/gtf/Homo_sapiens.GRCh37.87.g
 
 # Edit this for height/BMI.
 # Expected columns: chr pos a0 a1 beta, with or without a header.
-# export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/HEIGHT.ldpred2.tsv.gz_final_beta_auto.txt"
-export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/BMI.ldpred2.tsv.gz_final_beta_auto.txt"
+export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz_17June2026/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz_final_beta_auto.txt"
+#export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GIANT_UKBB_BMI_2018_ALL_SITES.ldpred2.gz_17June2026/GIANT_UKBB_BMI_2018_ALL_SITES.ldpred2.gz_final_beta_auto.txt"
 
-export OUTDIR="/myriadfs/home/ucju659/uclhg-mcs-pgs/PRSice-pathway/${TRAIT_PREFIX}/selected_pathways_ldpred2"
+export OUTDIR="/myriadfs/home/ucju659/uclhg-mcs-pgs/PRSet/${TRAIT_PREFIX}/selected_pathways_ldpred2"
 export OUT_PREFIX_NAME="${TRAIT_PREFIX}_selected_${SELECTION}_LDpred2_pathway_scores"
 
 export UPSTREAM_BP="35000"
@@ -73,8 +76,10 @@ done
 
 if [[ "${CAN_RUN}" != true ]]; then
   echo "WARNING: skipping LDpred2 selected pathway scores because an input is missing." >&2
-else
-  Rscript --vanilla - <<'RSCRIPT'
+fi
+
+R --vanilla
+
 suppressPackageStartupMessages({
   library(data.table)
   library(GenomicRanges)
@@ -284,5 +289,4 @@ cat(score_file, "\n")
 cat(meta_file, "\n")
 cat(snps_file, "\n")
 cat(rds_file, "\n")
-RSCRIPT
-fi
+

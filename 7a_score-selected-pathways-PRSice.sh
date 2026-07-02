@@ -20,7 +20,8 @@ set +e
 set -o pipefail
 
 module -f unload compilers mpi gcc-libs
-module load r/recommended
+module load r/4.5.1-openblas/gnu-10.2.0
+#module load r/recommended
 
 export OPENBLAS_NUM_THREADS=1
 export OMP_NUM_THREADS=1
@@ -28,22 +29,23 @@ export MKL_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 
-THREADS="${NSLOTS:-4}"
+THREADS="${NSLOTS:-2}"
 
 PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 
 # Choose one trait.
-# TRAIT_PREFIX="HT_EUR_2022"
-TRAIT_PREFIX="BMI_EUR_2018"
+TRAIT_PREFIX="HT_EUR_2022"
+#TRAIT_PREFIX="BMI_EUR_2018"
 
-SELECTION="FDR05"
+# Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
+SELECTION="Bonferroni05"
 
 SELECTED_GMT="${PROJECT_DIR}/pathways/selected/${TRAIT_PREFIX}_selected_${SELECTION}_GO_Reactome.symbols.gmt"
 
 # Edit these base GWAS paths for height/BMI.
 # The base file must contain: MarkerName CHR POS A1 A2 BETA P
-# BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/HEIGHT.prsice.tsv.gz"
-BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/BMI.prsice.tsv.gz"
+BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/GIANT_HEIGHT_YENGO_2022_EUR.rsID.prsice.tsv.gz"
+#BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/GIANT_UKBB_BMI_2018_ALL_SITES.rsID.prsice.tsv.gz"
 
 SOFTWARE="/myriadfs/home/ucju659/SOFTWARE/PRSice2"
 PRSICE_R="${SOFTWARE}/PRSice.R"
