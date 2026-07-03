@@ -45,6 +45,10 @@ PRSice_linux
 PRSice_mac
 PRSice_win64.exe
 
+# Scripts
+0c_update-r-packages-magma.R
+0d_record-software-versions.R
+
 # System/editor files
 .DS_Store
 Thumbs.db
