@@ -34,8 +34,8 @@ THREADS="${NSLOTS:-2}"
 PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 
 # Choose one trait.
-TRAIT_PREFIX="HT_EUR_2022"
-#TRAIT_PREFIX="BMI_EUR_2018"
+#TRAIT_PREFIX="HT_EUR_2022"
+TRAIT_PREFIX="BMI_EUR_2018"
 
 # Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
 SELECTION="Bonferroni05"
@@ -116,3 +116,105 @@ else
     echo "WARNING: PRSice returned non-zero status: ${STATUS}" >&2
   fi
 fi
+
+# ============================================================================
+# Final check and p1-only slimming for the trait currently being run
+# ============================================================================
+
+FILE="${OUT_PREFIX}.all_score"
+OUT="${OUT_PREFIX}.p1_only.all_score"
+
+echo
+echo "Checking PRSice non-pathway output for current trait"
+echo "Trait:        ${TRAIT_PREFIX}"
+echo "Selection:    ${SELECTION}"
+echo "All-score:    ${FILE}"
+echo "Slim output:  ${OUT}"
+echo
+
+if [[ ! -s "${FILE}" ]]; then
+  echo "WARNING: .all_score file was not created or is empty:"
+  echo "${FILE}"
+  echo "Skipping p1-only slimming."
+  exit 0
+fi
+
+echo "Original .all_score size:"
+ls -lh "${FILE}"
+
+echo
+echo "Original .all_score dimensions:"
+awk 'NR == 1 {print "columns:", NF} END {print "rows:", NR}' "${FILE}"
+
+echo
+echo "Header fields:"
+awk '
+NR == 1 {
+  for (i = 1; i <= NF; i++) print i, $i
+}
+' "${FILE}" | head -n 80
+
+N_COLS=$(
+  awk 'NR == 1 {print NF}' "${FILE}"
+)
+
+N_P1_COLS=$(
+  awk '
+  NR == 1 {
+    n = 0
+    for (i = 1; i <= NF; i++) {
+      if ($i ~ /_1$/) n++
+    }
+    print n
+  }
+  ' "${FILE}"
+)
+
+echo
+echo "Total columns: ${N_COLS}"
+echo "Detected *_1 score columns: ${N_P1_COLS}"
+
+if [[ "${N_COLS}" -eq 3 ]]; then
+  echo
+  echo "Non-pathway .all_score already appears to have 3 columns:"
+  echo "FID + IID + one score column."
+  echo "Creating p1-only copy for consistent downstream file naming:"
+  cp "${FILE}" "${OUT}"
+elif [[ "${N_P1_COLS}" -eq 1 ]]; then
+  echo
+  echo "Creating non-pathway p1-only slim .all_score:"
+  echo "${OUT}"
+  
+  awk '
+  NR == 1 {
+    for (i = 1; i <= NF; i++) {
+      if ($i == "FID" || $i == "IID" || $i ~ /_1$/) {
+        keep[i] = 1
+      }
+    }
+  }
+  {
+    out = ""
+    for (i = 1; i <= NF; i++) {
+      if (keep[i]) {
+        out = out (out == "" ? "" : OFS) $i
+      }
+    }
+    print out
+  }
+  ' OFS="\t" "${FILE}" > "${OUT}"
+else
+  echo
+  echo "WARNING: non-pathway file does not have exactly 3 columns and does not have exactly one *_1 column."
+  echo "Do not use this file for merging until you inspect the header."
+  echo "No slim file created."
+  exit 0
+fi
+
+echo
+echo "Slim/copied non-pathway file:"
+ls -lh "${OUT}"
+
+echo
+echo "Slim/copied dimensions:"
+awk 'NR == 1 {print "columns:", NF} END {print "rows:", NR}' "${OUT}"
