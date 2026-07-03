@@ -40,8 +40,9 @@ export THREADS="${NSLOTS:-2}"
 PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 
 # Choose one trait.
-TRAIT_PREFIX="HT_EUR_2022"
+#TRAIT_PREFIX="HT_EUR_2022"
 #TRAIT_PREFIX="BMI_EUR_2018"
+TRAIT_PREFIX="F4_2025"
 
 # Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
 SELECTION="Bonferroni05"
@@ -50,8 +51,9 @@ export BIGSNP_RDS="/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS/MCS_topmed_EUR_KIN
 
 # Edit this for height/BMI.
 # Expected columns: chr pos a0 a1 beta, with or without a header.
-export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz_17June2026/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz_final_beta_auto.txt"
+#export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz_17June2026/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz_final_beta_auto.txt"
 #export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GIANT_UKBB_BMI_2018_ALL_SITES.ldpred2.gz_17June2026/GIANT_UKBB_BMI_2018_ALL_SITES.ldpred2.gz_final_beta_auto.txt"
+export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/F4_Internalizing_2025.ldpred2.tsv.gz_24April2026/F4_Internalizing_2025.ldpred2.tsv.gz_final_beta_auto.txt"
 
 export NONPATHWAY_EXTRACT="${PROJECT_DIR}/pathways/selected/${TRAIT_PREFIX}_selected_${SELECTION}_nonpathway/nonpathway_snps.extract.txt"
 

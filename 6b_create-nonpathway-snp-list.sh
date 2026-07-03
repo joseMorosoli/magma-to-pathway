@@ -34,8 +34,9 @@ export R_LIBS_USER="/myriadfs/home/ucju659/MyRLibs/R-4.5.1"
 PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 
 # Choose one trait.
-TRAIT_PREFIX="HT_EUR_2022"
+#TRAIT_PREFIX="HT_EUR_2022"
 #TRAIT_PREFIX="BMI_EUR_2018"
+TRAIT_PREFIX="F4_2025"
 
 # Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
 SELECTION="Bonferroni05"

@@ -34,7 +34,8 @@ results_dir <- "/myriadfs/home/ucju659/SOFTWARE/MAGMA/results"
 # Traits to check.
 traits <- c(
   "HT_EUR_2022",
-  "BMI_EUR_2018"
+  "BMI_EUR_2018",
+  "F4_2025"
 )
 
 # Pathway collections to check.

@@ -34,7 +34,8 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Choose one trait.
 #trait_prefix <- "HT_EUR_2022"
-trait_prefix <- "BMI_EUR_2018"
+#trait_prefix <- "BMI_EUR_2018"
+trait_prefix <- "F4_2025"
 
 # Choose selected table from script 5.
 # Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
