@@ -1,96 +1,134 @@
-# Pathway PGS, MAGMA and LDpred2 pipeline
+# MAGMA pathway discovery and pathway-based polygenic scoring workflow
 
-This repository contains a reproducible workflow for preparing GWAS summary statistics, running MAGMA gene and pathway analyses, and generating LDpred2 polygenic scores on the UCL Myriad HPC environment.
+This repository contains a reproducible workflow for moving from GWAS summary statistics to:
 
-The current positive-control examples are height and BMI. The scripts are deliberately written as **one-trait-at-a-time** scripts to make debugging and re-running safer.
+1. MAGMA gene-level results.
+2. MAGMA gene-set/pathway results.
+3. Selected pathway sets for follow-up scoring.
+4. PRSice/PRSet clumping-and-thresholding pathway scores.
+5. LDpred2 posterior-beta pathway scores.
+6. Genome-wide background scores excluding SNPs mapped to the selected pathway-gene set.
 
-## Workflow summary
+The workflow was developed for use on the UCL Myriad high-performance computing environment, but the scripts are written as editable templates and can be adapted to other Unix-like systems.
 
-```text
-0_format-sumstats-ldpred2.sh
-    Raw GWAS summary statistics -> LDpred2-ready summary statistics
+## Repository scope
 
-1_munge-sumstats-magma.R
-    LDpred2-ready summary statistics + MAGMA reference .bim -> MAGMA-ready summary statistics
+This repository is for pathway discovery and pathway/background score construction. It does **not** perform MCS phenotype construction, child-mother-father score merging, role-specific PC residualisation, or downstream trio model estimation.
 
-2_create-annotation-file.sh
-    MAGMA reference .bim + NCBI gene locations -> reusable MAGMA .genes.annot file
-
-3_MAGMA-run-gene-level.sh
-    MAGMA-ready summary statistics + .genes.annot -> .genes.raw and .genes.out
-
-4_run-MAGMA-pathways.sh
-    .genes.raw + pathway .gmt files -> MAGMA .gsa.out pathway results
-
-5_extract-sig-pathways.R
-    .gsa.out files -> FDR/Bonferroni-adjusted tables and top pathways
-
-A_ldpred2_auto_inf_qc_lift2_custom.R
-    Custom LDpred2-inf/auto R pipeline with additional stability checks
-
-B_subLDPred2.mcs.uclhg.sh
-    Myriad job-submission script for A_ldpred2_auto_inf_qc_lift2_custom.R
-```
-
-## Intended Myriad paths
-
-The MAGMA scripts currently assume:
-
-```bash
-/myriadfs/home/ucju659/SOFTWARE/MAGMA
-```
-
-with this structure:
+For the downstream MCS pathway-score merge and trio-analysis workflow, see:
 
 ```text
-SOFTWARE/MAGMA/
-├── v1.10/
-│   └── magma
-├── g1000_eur/
-│   ├── g1000_eur.bed
-│   ├── g1000_eur.bim
-│   └── g1000_eur.fam
-├── gene_locations/
-│   ├── NCBI37.3.gene.loc
-│   └── GRCh37_35kb_10kb.genes.annot
-├── pathways/
-│   ├── c5.go.v2026.1.Hs.entrez.gmt
-│   └── c2.cp.reactome.v2026.1.Hs.entrez.gmt
-├── munged/
-├── results/
-└── logs/
+https://github.com/joseMorosoli/pathway-based-trios.git
 ```
 
-The LDpred2 scripts currently assume:
+## Data access and privacy
+
+This repository contains code only. It does not contain raw GWAS summary statistics, MCS phenotype files, genotype files, target PLINK/bigsnpr files, generated polygenic scores, MAGMA outputs, or individual-level pathway scores.
+
+Generated score files are for private/internal use only and must be stored on approved secure servers. Users are responsible for ensuring that their use of MCS data, genotype data, GWAS summary statistics, and derived scores complies with the relevant data-access agreements.
+
+Do not commit any individual-level data, genotype files, summary statistics, score files, logs containing identifiable paths, or large intermediate outputs to GitHub.
+
+## Main software
+
+The workflow was developed with:
+
+- MAGMA v1.10.
+- PRSice-2 / PRSet v2.3.3.
+- R with packages including `data.table`, `bigsnpr`, `bigstatsr`, `GenomicRanges`, `GenomeInfoDb`, `rtracklayer`, `MungeSumstats`, and supporting tidyverse/plotting packages.
+- MSigDB Human v2026.1.Hs pathway files.
+- LDpred2/bigsnpr posterior-beta scoring.
+
+Exact R package versions should be recorded at run time with:
 
 ```bash
-/myriadfs/home/ucju659/uclhg-mcs-pgs
-/myriadfs/home/ucju659/SUMSTATS/ldpred2_ready
-/myriadfs/home/ucju659/misc/hapmap3plus
-/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS
+Rscript --vanilla scripts/0d_record-software-versions.R
 ```
 
-Edit paths at the top of each script before running on a different system.
-
-## Step 0: Format raw GWAS summary statistics for LDpred2
-
-Run interactively on Myriad:
+Command-line software versions can be recorded with:
 
 ```bash
-qrsh -pe smp 1 -l mem=16G,h_rt=0:30:00 -now no
-bash scripts/0_format-sumstats-ldpred2.sh
+bash scripts/0e_record-command-line-software.sh
 ```
 
-Edit only the user settings at the top:
+Edit the paths in `0e_record-command-line-software.sh` before running.
 
-```bash
-IN=...
-OUTDIR=...
-OUT=...
-N_GWAS=...
-MIN_MAF=...
-MIN_INFO=...
+## External resources and provenance
+
+### Pathway databases
+
+The pathway inputs use MSigDB Human v2026.1.Hs files:
+
+```text
+c2.cp.reactome.v2026.1.Hs.entrez.gmt
+c2.cp.reactome.v2026.1.Hs.symbols.gmt
+c5.go.bp.v2026.1.Hs.symbols.gmt
+c5.go.cc.v2026.1.Hs.symbols.gmt
+c5.go.mf.v2026.1.Hs.symbols.gmt
+c5.go.v2026.1.Hs.entrez.gmt
+c5.go.v2026.1.Hs.symbols.gmt
 ```
+
+MAGMA gene-set analysis uses Entrez-ID GMTs. PRSice/PRSet and LDpred2 pathway scoring use gene-symbol GMTs because the SNP-to-gene mapping step uses a GRCh37 GTF with gene names.
+
+### Genome build and SNP-to-gene mapping
+
+The current project convention is:
+
+```text
+Genome build: GRCh37
+SNP-to-gene window: 35 kb upstream, 10 kb downstream
+```
+
+The MAGMA annotation step creates a reusable `.genes.annot` file. The downstream pathway and background scoring scripts use the same 35 kb / 10 kb convention when mapping SNPs to genes from the GTF.
+
+The project has used a GRCh37 GTF whose filename indicates Ensembl GRCh37 release 87 (`Homo_sapiens.GRCh37.87.gtf`). Verify the exact GTF source and version before reporting final analyses.
+
+### MAGMA reference data
+
+MAGMA software and reference files should be obtained from the CNCR MAGMA website:
+
+```text
+https://cncr.nl/research/magma/
+```
+
+The MAGMA website provides 1000 Genomes Phase 3 reference data files with SNP locations in human genome Build 37.
+
+### LDpred2 LD reference
+
+The LDpred2 HapMap3+ LD reference used by this project is available from Figshare:
+
+```text
+https://figshare.com/articles/dataset/LD_reference_for_HapMap3_/21305061
+```
+
+### GWAS examples used in this project
+
+The scripts are written one trait at a time. Worked traits include:
+
+- BMI: GIANT + UK Biobank 2018 BMI summary statistics from Zenodo: `https://zenodo.org/records/1251813`
+- Height: GIANT/Yengo 2022 height GWAS summary statistics and PGS weights, including `Yengo.2022.height.GWAS.EUR.gz`.
+- F4 psychiatric/internalising factor: Grotzinger et al., *Nature*, DOI `10.1038/s41586-025-09820-3`.
+
+Users should check the README or metadata accompanying each GWAS before running the scripts, especially for sample size, ancestry, genome build, allele definitions, and whether per-SNP sample size is available.
+
+## Important terminology
+
+Throughout this repository, “non-pathway” means **outside the selected pathway-gene set**, not outside all known biological pathways.
+
+Operationally, the non-pathway/background score is a genome-wide background score excluding SNPs mapped to genes in the selected pathway set. It is the complement of the selected pathway SNP union in the target genotype data, using the same genome build and SNP-to-gene window.
+
+Do not interpret the non-pathway score as a generic “all non-biological-pathway SNPs” score.
+
+## Pipeline overview
+
+Run scripts one trait at a time by editing the user-settings block at the top of each script. The order below assumes all external software, reference files, GWAS summary statistics, target genotype files, and pathway files have already been obtained and stored securely.
+
+### 0. Setup and summary-statistic formatting
+
+#### `0a_format-sumstats-ldpred2.sh`
+
+Convert raw GWAS summary statistics into a simple LDpred2-ready format.
 
 Output columns:
 
@@ -98,58 +136,58 @@ Output columns:
 CHR BP A2 A1 N BETA SE MAF P INFO
 ```
 
-`A1` is the effect allele and `A2` is the other allele. Ambiguous A/T and C/G SNPs are removed.
+Conventions:
 
-## Step 1: Munge summary statistics for MAGMA
+- `A1` is the effect allele.
+- `A2` is the other/non-effect allele.
+- Ambiguous A/T and C/G SNPs are removed.
+- Duplicate physical positions are removed, keeping the first occurrence.
+- If the raw file has no per-SNP `N`, the user must provide a defensible fallback `N_GWAS` value.
 
-Run locally or on Myriad:
+#### `0b_format-sumstats-prsice-rsid.sh`
 
-```bash
-Rscript scripts/1_munge-sumstats-magma.R
+Convert LDpred2-ready summary statistics to PRSice-ready format by mapping `CHR:BP` to the rsID used in the target `.bim` file.
+
+Output columns:
+
+```text
+MarkerName CHR POS A1 A2 N BETA SE MAF P
 ```
 
-This script maps variants by `CHR:BP` to the MAGMA reference `.bim` file and uses the `.bim` SNP ID as the MAGMA `SNP` column.
+`MarkerName` should match SNP IDs in the target PLINK files.
 
-Required output columns for MAGMA:
+### 1. MAGMA gene-level analysis
+
+#### `1_munge-sumstats-magma.R`
+
+Munge summary statistics into MAGMA-ready format.
+
+For standard MAGMA gene-level analyses with per-SNP sample size, the expected minimal columns are:
 
 ```text
 SNP P N
 ```
 
-Extra audit columns are retained.
+For GWAS where SNP-level sample size is not available, do not fabricate per-SNP `N`. Use a documented fixed effective sample size only when this is defensible and report it in analysis notes.
 
-## Step 2: Create MAGMA gene annotation
+#### `2_create-annotation-file.sh`
 
-Run once per reference panel, genome build, gene-location file and annotation window:
+Create the reusable MAGMA SNP-to-gene annotation file.
 
-```bash
-bash scripts/2_create-annotation-file.sh
-```
-
-Output:
+Current convention:
 
 ```text
-gene_locations/GRCh37_35kb_10kb.genes.annot
+Genome build: GRCh37
+Window: 35 kb upstream, 10 kb downstream
 ```
 
-The current annotation window is 35 kb upstream and 10 kb downstream.
+Rerun this step only if the reference `.bim`, gene-location file, genome build, or window changes.
 
-## Step 3: Run MAGMA gene-level analysis
+#### `3_MAGMA-run-gene-level.sh`
 
-Submit one trait at a time on Myriad:
+Run MAGMA gene-level analysis for one trait at a time.
 
-```bash
-qsub scripts/3_MAGMA-run-gene-level.sh
-```
-
-Edit only:
-
-```bash
-MUNGED_FILE=...
-GENE_OUT=...
-```
-
-Outputs:
+Expected outputs:
 
 ```text
 <GENE_OUT>.genes.raw
@@ -157,118 +195,245 @@ Outputs:
 <GENE_OUT>.log
 ```
 
-The `.genes.raw` file is the input for pathway analysis.
+### 2. MAGMA pathway analysis and pathway selection
 
-## Step 4: Run MAGMA pathway analysis
+#### `4a_make-short-id-gmts.R`
 
-Run after `.genes.raw` exists:
+Create short-ID GMT files to avoid long pathway names being truncated in MAGMA output, while preserving a mapping back to full pathway names.
 
-```bash
-qsub scripts/4_run-MAGMA-pathways.sh
-```
+#### `4b_run-MAGMA-pathways.sh`
 
-This submits GO and Reactome as separate MAGMA gene-set analyses within one Myriad job. It does **not** rerun the gene-level step.
+Run MAGMA gene-set/pathway analyses using GO and Reactome as separate gene-set collections.
 
-Outputs:
+Expected outputs:
 
 ```text
-<trait>_GO.gsa.out
-<trait>_Reactome.gsa.out
+<TRAIT>_GO.gsa.out
+<TRAIT>_Reactome.gsa.out
 ```
 
-## Step 5: Extract significant pathways
+Multiple-testing correction and selected-pathway extraction are handled by later scripts.
 
-Run:
+#### `5a_extract-sig-pathways.R`
 
-```bash
-Rscript scripts/5_extract-sig-pathways.R
-```
-
-This adds Benjamini-Hochberg FDR and Bonferroni correction separately within each pathway collection.
-
-Outputs for each collection:
+Extract significant pathway results using the selected correction threshold. The project convention has used options such as:
 
 ```text
-<prefix>_all_with_FDR.tsv
-<prefix>_nominal_P05.tsv
-<prefix>_FDR05.tsv
-<prefix>_Bonferroni05.tsv
-<prefix>_top50.tsv
+Bonferroni05
+FDR05
+nominal_P05
+top50
 ```
 
-## Step A/B: Run LDpred2 PGS
+#### `5b_check-selected-pathways.R`
 
-Prepare `sumstats_list.csv` in the LDpred2 working directory. By default, the submission script expects no header:
+Check selected pathways before score construction. This step is intended to catch missing pathway IDs, naming problems, or mismatches between MAGMA output and source GMT files.
+
+#### `6a_make-selected-pathway-gmt.R`
+
+Create selected pathway GMT files for downstream PRSice/PRSet and LDpred2 scoring.
+
+Typical selected GMT output:
 
 ```text
-GIANT_UKBB_BMI_2018_ALL_SITES.ldpred2.gz,FALSE
-GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz,FALSE
+<TRAIT>_selected_<SELECTION>_GO.symbols.gmt
+<TRAIT>_selected_<SELECTION>_Reactome.symbols.gmt
+<TRAIT>_selected_<SELECTION>_GO_Reactome.symbols.gmt
 ```
 
-Submit:
+The combined GO+Reactome selected GMT is used for main selected-pathway scoring and background-score construction.
 
-```bash
-qsub scripts/B_subLDPred2.mcs.uclhg.sh
-```
+### 3. Background/non-selected-pathway scores
 
-If there are two rows in `sumstats_list.csv`, change the SGE array line in `B_subLDPred2.mcs.uclhg.sh` to:
+#### `6b_create-nonpathway-snp-list.sh`
 
-```bash
-#$ -t 1-2
-```
+Create the selected pathway SNP union and its complement in the target genotype data.
 
-## Reproducibility checklist
-
-For each trait, record:
-
-- GWAS source and citation
-- download date
-- ancestry
-- genome build
-- sample size handling
-- effect allele definition
-- filters applied
-- summary-statistic columns used
-- reference panel used
-- MAGMA version
-- LDpred2/bigsnpr version
-- pathway database, collection and version
-- gene identifier type
-- SNP-to-gene window
-- Myriad job ID
-- output file names
-
-For pathway analyses, record pathway provenance explicitly, for example:
+Expected outputs:
 
 ```text
-MSigDB C5 Gene Ontology v2026.1, Entrez IDs, GRCh37, 35 kb upstream / 10 kb downstream, 1000 Genomes EUR reference.
-MSigDB C2 Reactome v2026.1, Entrez IDs, GRCh37, 35 kb upstream / 10 kb downstream, 1000 Genomes EUR reference.
+pathway_union_snps.txt
+nonpathway_snps.extract.txt
+nonpathway_snp_definition_metadata.tsv
+selected_pathway_genes_from_gmt.txt
+selected_pathway_genes_found_in_gtf.txt
 ```
 
-## Interpretation cautions
+The metadata file records the selected GMT, target genotype file, GTF, window size, number of selected pathways, number of genes, number of pathway-union SNPs, and number of non-pathway SNPs.
 
-MAGMA gene-set results are competitive pathway-level statistical tests based on SNP-to-gene mapping assumptions. They do not prove that a pathway, gene or biological mechanism is causal.
+#### `6c_score-nonpathway-PRSice.sh`
 
-Pathway-based PGS/PRSet-style analyses produce individual-level genetic liability scores restricted to defined gene sets or pathways. Their interpretation depends on pathway definition, LD, ancestry, SNP-to-gene mapping, sample size, p-value thresholding and covariate structure.
+Create a PRSice C+T background score excluding selected-pathway SNPs.
 
-Positive-control traits such as height and BMI are useful for checking that the pipeline behaves sensibly, but results still depend on GWAS power, ancestry matching, phenotype measurement and sample overlap.
+The script uses:
 
-## No-exit Bash behaviour
+```text
+--extract nonpathway_snps.extract.txt
+--bar-levels 1
+--fastscore
+--no-regress
+--all-score
+--print-snp
+```
 
-The Bash scripts in this repository are currently written in **no-exit mode**. Failed checks print `WARNING:` messages and skip unsafe analysis commands rather than terminating the shell. This is intentional for interactive Myriad work, especially if a script is accidentally sourced rather than executed.
+The script also creates or copies a p1-only `.all_score` file for downstream use:
 
-Important trade-off: this is safer for an interactive shell, but less strict for submitted jobs. A Myriad job may finish without scheduler failure even if the analysis was skipped. Always inspect the scheduler log and confirm that the expected output files were created and are non-empty.
+```text
+<TRAIT>_selected_<SELECTION>_nonpathway_PRSice.p1_only.all_score
+```
 
-Recommended usage remains:
+#### `6d_score-nonpathway-LDpred2.sh`
+
+Create an LDpred2 background score by restricting LDpred2 posterior betas to the non-selected-pathway SNP complement.
+
+Expected outputs:
+
+```text
+<TRAIT>_selected_<SELECTION>_nonpathway_LDpred2.tsv.gz
+<TRAIT>_selected_<SELECTION>_nonpathway_LDpred2.metadata.tsv
+<TRAIT>_selected_<SELECTION>_nonpathway_LDpred2.snps_used.tsv.gz
+<TRAIT>_selected_<SELECTION>_nonpathway_LDpred2.rds
+```
+
+### 4. Selected pathway scores
+
+#### `7a_score-selected-pathways-PRSice.sh`
+
+Create PRSice/PRSet clumping-and-thresholding scores for each selected pathway.
+
+The script uses:
+
+```text
+--gtf <GRCh37 GTF>
+--msigdb <selected pathway GMT>
+--wind-5 35kb
+--wind-3 10kb
+--clump-kb 250
+--clump-r2 0.1
+--clump-p 1
+--bar-levels 1
+--no-regress
+--all-score
+--print-snp
+```
+
+The intended downstream file is the p1-only slim file:
+
+```text
+<TRAIT>_selected_<SELECTION>_PRSet_CT_GRCh37_35kb_10kb.p1_only.all_score
+```
+
+#### `7b_score-selected-pathways-LDpred2.sh`
+
+Create one LDpred2 posterior-beta score per selected pathway.
+
+Expected outputs:
+
+```text
+<TRAIT>_selected_<SELECTION>_LDpred2_pathway_scores.tsv.gz
+<TRAIT>_selected_<SELECTION>_LDpred2_pathway_scores.metadata.tsv
+<TRAIT>_selected_<SELECTION>_LDpred2_pathway_scores.snps_used.tsv.gz
+<TRAIT>_selected_<SELECTION>_LDpred2_pathway_scores.rds
+```
+
+The metadata file records pathway-level counts of genes, genes found in the GTF, target SNPs mapped to the pathway, and LDpred2 SNPs used.
+
+## Auxiliary LDpred2 scripts and credit
+
+`A_ldpred2_auto_inf_qc_lift2_custom.R` and `B_subLDPred2.mcs.uclhg.sh` are auxiliary LDpred2 scripts adapted from Andrea G. Allegrini’s LDpred2 pipeline:
+
+```text
+https://github.com/AndreAllegrini/LDpred2
+```
+
+They have been modified for this project to improve compatibility with recent LDpred2-auto behaviour and to reduce errors in automated posterior-beta selection. Users should validate these scripts when changing GWAS inputs, target genotype data, LD references, genome builds, or software versions.
+
+## Quality-control checklist
+
+Before using any generated score file, check:
+
+- The selected pathway counts match expectations.
+- Selected pathway names match the source GMT files.
+- The GTF gene identifier type matches the selected GMT gene identifier type.
+- `nonpathway_snp_definition_metadata.tsv` contains non-zero selected genes, pathway-union SNPs, and non-pathway SNPs.
+- PRSice `.all_score` files have the expected number of columns.
+- PRSice selected-pathway files use the p1-only slim files for downstream merging.
+- LDpred2 score files have non-zero variance and plausible SNP counts in metadata.
+- Height scores predict measured height in the target cohort as a positive-control check.
+- BMI scores predict measured BMI in the target cohort as a positive-control check.
+
+For PRSice p1-only selected-pathway files, expected columns are:
+
+```text
+2 ID columns + number of selected pathways
+```
+
+For PRSice p1-only background files, expected columns are:
+
+```text
+FID IID <one score column>
+```
+
+## Suggested Myriad setup
+
+Example R 4.5.1 setup:
 
 ```bash
-bash scripts/2_create-annotation-file.sh
-qsub scripts/3_MAGMA-run-gene-level.sh
-qsub scripts/4_run-MAGMA-pathways.sh
+module -f unload compilers mpi gcc-libs
+module load r/4.5.1-openblas/gnu-10.2.0
+unset R_LIBS
+export R_LIBS_USER="/myriadfs/home/<USER>/MyRLibs/R-4.5.1"
 ```
 
-Avoid sourcing these scripts with `source script.sh` unless you are deliberately running them line by line.
+Example threading controls:
 
-## Interactive Myriad note
+```bash
+export OPENBLAS_NUM_THREADS=1
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+```
 
-The Bash scripts deliberately avoid custom Bash helper functions such as `warn()`. Warnings are printed using plain `echo "WARNING: ..." >&2` statements. This makes the scripts easier to run line-by-line in an interactive Myriad session without needing to define helper functions first.
+Edit local paths before running any script. Paths in the scripts are templates from the development environment and should not be treated as portable defaults.
+
+## Reproducibility notes
+
+For each analysis run, record:
+
+- Trait name and GWAS source.
+- GWAS ancestry and sample size/effective sample size.
+- Genome build of the GWAS summary statistics.
+- Whether SNP-level `N` was available.
+- MAGMA version.
+- PRSice version.
+- R version and package versions.
+- Pathway database name, collection, version, identifier type, and download date.
+- GTF source, genome build, release/version, and gene identifier field used.
+- Target genotype dataset and genome build.
+- SNP-to-gene window.
+- Selection threshold used for follow-up pathway scoring.
+- LDpred2 LD reference source and version/date.
+
+Use `docs/pathway_provenance_template.tsv` and `docs/file_manifest_template.tsv` as audit templates.
+
+## References and resources
+
+- MAGMA software and documentation: https://cncr.nl/research/magma/
+- de Leeuw CA, Mooij JM, Heskes T, Posthuma D. MAGMA: generalized gene-set analysis of GWAS data. *PLoS Computational Biology*. 2015;11(4):e1004219. DOI: 10.1371/journal.pcbi.1004219.
+- PRSice-2 documentation: https://choishingwan.github.io/PRSice/
+- Choi SW, O'Reilly PF. PRSice-2: Polygenic Risk Score software for biobank-scale data. *GigaScience*. 2019. DOI: 10.1093/gigascience/giz082.
+- Choi SW, García-González J, et al. Pathway-based polygenic risk score analyses and software. *PLOS Genetics*. 2023. DOI: 10.1371/journal.pgen.1010624.
+- LDpred2/bigsnpr documentation: https://privefl.github.io/bigsnpr/articles/LDpred2.html
+- Privé F, Arbel J, Vilhjálmsson BJ. LDpred2: better, faster, stronger. *Bioinformatics*. 2021. DOI: 10.1093/bioinformatics/btaa1029.
+- LDpred2 HapMap3+ LD reference: https://figshare.com/articles/dataset/LD_reference_for_HapMap3_/21305061
+- MSigDB collections: https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+- GIANT BMI 2018 Zenodo record: https://zenodo.org/records/1251813
+- GIANT/Yengo 2022 height data: https://giant-consortium.web.broadinstitute.org/GIANT_consortium_data_files
+- Yengo L, et al. A saturated map of common genetic variants associated with human height. *Nature*. 2022. DOI: 10.1038/s41586-022-05275-y.
+- Grotzinger AD, et al. Mapping the genetic landscape across 14 psychiatric disorders. *Nature*. DOI: 10.1038/s41586-025-09820-3.
+- 1000 Genomes Project Consortium. A global reference for human genetic variation. *Nature*. 2015. DOI: 10.1038/nature15393.
+
+## Licence
+
+This repository is released under the MIT Licence. See `LICENSE`.
