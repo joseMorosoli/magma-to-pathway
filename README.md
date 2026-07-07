@@ -8,12 +8,13 @@ This repository contains a reproducible workflow for moving from GWAS summary st
 4. PRSice/PRSet clumping-and-thresholding pathway scores.
 5. LDpred2 posterior-beta pathway scores.
 6. Genome-wide background scores excluding SNPs mapped to the selected pathway-gene set.
+7. Optional tissue/cell-type MAGMA gene-property analyses and optional tissue/cell-type-derived PRSet gene sets.
 
 The workflow was developed for use on the UCL Myriad high-performance computing environment, but the scripts are written as editable templates and can be adapted to other Unix-like systems.
 
 ## Repository scope
 
-This repository is for pathway discovery and pathway/background score construction. It does **not** perform MCS phenotype construction, child-mother-father score merging, role-specific PC residualisation, or downstream trio model estimation.
+This repository is for pathway discovery, pathway/background score construction, and optional post-GWAS tissue/cell-type annotation. It does **not** perform MCS phenotype construction, child-mother-father score merging, role-specific PC residualisation, or downstream trio model estimation.
 
 For the downstream MCS pathway-score merge and trio-analysis workflow, see:
 
@@ -21,13 +22,73 @@ For the downstream MCS pathway-score merge and trio-analysis workflow, see:
 https://github.com/joseMorosoli/pathway-based-trios.git
 ```
 
+The main scientific use case is pathway-based polygenic scoring. Tissue/cell-type scripts are included as optional exploratory utilities and are not required for the core pathway PRSet/LDpred2 pipeline.
+
+## Current repository layout
+
+Scripts currently live in the repository root, not in a separate `scripts/` directory. Commands in this README therefore call scripts as `./script_name.R` or `bash script_name.sh` from the repository root.
+
+```text
+magma-to-pathway/
+├── archive/                         # Old scripts, exploratory attempts, or inactive materials
+├── data/                            # Local metadata/manifests or small non-sensitive helper inputs
+├── logs/                            # Local job logs; do not commit substantive logs
+├── munged/                          # Locally generated formatted summary statistics; do not commit
+├── results/                         # Locally generated MAGMA/PRSice/LDpred2 outputs; do not commit
+├── tissue-cell-analyses/            # Optional tissue/cell-type analyses and bridge scripts
+├── LICENSE
+├── .gitignore
+├── README.md
+├── magma-to-pathway.Rproj
+├── 0a_format-sumstats-ldpred2.sh
+├── 0b_format-sumstats-prsice-rsid.sh
+├── 0c_update-r-packages-magma.R
+├── 0d_record-software-versions.R
+├── 1_munge-sumstats-magma.R
+├── 2_create-annotation-file.sh
+├── 3_MAGMA-run-gene-level.sh
+├── 4a_make-short-id-gmts.R
+├── 4b_run-MAGMA-pathways.sh
+├── 5a_extract-sig-pathways.R
+├── 5b_check-selected-pathways.R
+├── 6a_make-selected-pathway-gmt.R
+├── 6b_create-nonpathway-snp-list.sh
+├── 6c_score-nonpathway-PRSice.sh
+├── 6d_score-nonpathway-LDpred2.sh
+├── 7a_score-selected-pathways-PRSice.sh
+├── 7b_score-selected-pathways-LDpred2.sh
+├── 8a_prepare-celltype-gene-covar.R
+├── 8b_run-MAGMA-celltype-gene-property.sh
+├── 8c_extract-MAGMA-celltype-results.R
+├── A_ldpred2_auto_inf_qc_lift2_custom.R
+└── B_subLDPred2.mcs.uclhg.sh
+```
+
+The following local R session files may appear during development but should not normally be committed:
+
+```text
+.RData
+.Rhistory
+.RDataTmp
+```
+
 ## Data access and privacy
 
-This repository contains code only. It does not contain raw GWAS summary statistics, MCS phenotype files, genotype files, target PLINK/bigsnpr files, generated polygenic scores, MAGMA outputs, or individual-level pathway scores.
+This repository should contain code, documentation, and lightweight non-sensitive metadata only. It should not contain raw GWAS summary statistics, MCS phenotype files, genotype files, target PLINK/bigsnpr files, generated polygenic scores, MAGMA outputs, or individual-level pathway scores.
 
 Generated score files are for private/internal use only and must be stored on approved secure servers. Users are responsible for ensuring that their use of MCS data, genotype data, GWAS summary statistics, and derived scores complies with the relevant data-access agreements.
 
-Do not commit any individual-level data, genotype files, summary statistics, score files, logs containing identifiable paths, or large intermediate outputs to GitHub.
+Do not commit any individual-level data, genotype files, summary statistics, score files, logs containing identifiable or sensitive paths, or large intermediate outputs to GitHub.
+
+Recommended use of local folders:
+
+```text
+data/      small non-sensitive manifests, toy examples, or documentation inputs only
+munged/    formatted GWAS files created by 0a/0b/1; normally gitignored
+results/   MAGMA, PRSice, PRSet, LDpred2 outputs; normally gitignored
+logs/      Myriad job logs; normally gitignored
+archive/   old or superseded scripts kept for audit, not part of the active pipeline
+```
 
 ## Main software
 
@@ -38,20 +99,15 @@ The workflow was developed with:
 - R with packages including `data.table`, `bigsnpr`, `bigstatsr`, `GenomicRanges`, `GenomeInfoDb`, `rtracklayer`, `MungeSumstats`, and supporting tidyverse/plotting packages.
 - MSigDB Human v2026.1.Hs pathway files.
 - LDpred2/bigsnpr posterior-beta scoring.
+- Optional tissue/cell-type workflow: `MAGMA.Celltyping`, `EWCE`, `ewceData`, `orthogene`, `ggtree`, `MungeSumstats`, `ggdendro`, and `gh`.
 
 Exact R package versions should be recorded at run time with:
 
 ```bash
-Rscript --vanilla scripts/0d_record-software-versions.R
+Rscript --vanilla 0d_record-software-versions.R
 ```
 
-Command-line software versions can be recorded with:
-
-```bash
-bash scripts/0e_record-command-line-software.sh
-```
-
-Edit the paths in `0e_record-command-line-software.sh` before running.
+If a command-line software version script is added later, edit all local paths before running it. Do not assume paths from the development environment are portable.
 
 ## External resources and provenance
 
@@ -82,7 +138,7 @@ SNP-to-gene window: 35 kb upstream, 10 kb downstream
 
 The MAGMA annotation step creates a reusable `.genes.annot` file. The downstream pathway and background scoring scripts use the same 35 kb / 10 kb convention when mapping SNPs to genes from the GTF.
 
-The project has used a GRCh37 GTF whose filename indicates Ensembl GRCh37 release 87 (`Homo_sapiens.GRCh37.87.gtf`). Verify the exact GTF source and version before reporting final analyses.
+The project has used a GRCh37 GTF whose filename indicates Ensembl GRCh37 release 87 (`Homo_sapiens.GRCh37.87.gtf`). Optional PRSet scoring of tissue/cell-type-derived GMTs can also use GENCODE Release 19 GRCh37 if the gene identifiers are compatible. Verify the exact GTF source, release, genome build, and gene identifier field before reporting final analyses.
 
 ### MAGMA reference data
 
@@ -102,6 +158,17 @@ The LDpred2 HapMap3+ LD reference used by this project is available from Figshar
 https://figshare.com/articles/dataset/LD_reference_for_HapMap3_/21305061
 ```
 
+### Optional tissue/cell-type resources
+
+The optional tissue/cell-type workflow may use:
+
+- FUMA GTEx v8 general gene expression file.
+- FUMA GTEx v8 specific gene expression file.
+- MAGMA.Celltyping / `ewceData` cell-type datasets, for example `ctd_allKI`, `ctd_DRONC_human`, `ctd_AIBS`, and `ctd_Tasic`.
+- A GRCh37-compatible GTF for optional PRSet scoring of top-decile tissue/cell-type gene sets.
+
+These resources must be recorded with: database/source, version, genome build where applicable, download date, gene identifier type, filtering criteria, and any threshold used to define a binary gene set.
+
 ### GWAS examples used in this project
 
 The scripts are written one trait at a time. Worked traits include:
@@ -120,11 +187,37 @@ Operationally, the non-pathway/background score is a genome-wide background scor
 
 Do not interpret the non-pathway score as a generic “all non-biological-pathway SNPs” score.
 
+For optional tissue/cell-type work, distinguish:
+
+```text
+MAGMA tissue/cell-type gene-property analysis:
+  A post-GWAS enrichment/annotation analysis using continuous tissue or cell-type expression/specificity values.
+
+Tissue/cell-type-derived PRSet scores:
+  Optional exploratory PRSet scores created only after converting continuous tissue/cell-type values into binary gene sets, for example top 10% expressed/specific genes.
+```
+
+A top-decile tissue/cell-type PRSet score is not a continuous tissue-weighted score. It is a PRS restricted to SNPs mapped to genes passing a chosen tissue/cell-type threshold.
+
 ## Pipeline overview
 
 Run scripts one trait at a time by editing the user-settings block at the top of each script. The order below assumes all external software, reference files, GWAS summary statistics, target genotype files, and pathway files have already been obtained and stored securely.
 
 ### 0. Setup and summary-statistic formatting
+
+#### `0c_update-r-packages-magma.R`
+
+Optional helper to install or update R packages needed for the local MAGMA/pathway workflow. Use carefully on Myriad. For stable analyses, record package versions and avoid changing the environment mid-project.
+
+#### `0d_record-software-versions.R`
+
+Record R version and R package versions for reproducibility.
+
+Run from the repository root:
+
+```bash
+Rscript --vanilla 0d_record-software-versions.R
+```
 
 #### `0a_format-sumstats-ldpred2.sh`
 
@@ -338,6 +431,73 @@ Expected outputs:
 
 The metadata file records pathway-level counts of genes, genes found in the GTF, target SNPs mapped to the pathway, and LDpred2 SNPs used.
 
+### 5. Optional tissue/cell-type analyses
+
+These scripts are optional. They are included because tissue/cell-type annotations can help interpret pathway results or support later reviewer-requested analyses. They should not replace the core pathway PRSet/LDpred2 workflow.
+
+Recommended location for optional helper scripts and outputs:
+
+```text
+tissue-cell-analyses/
+├── README.md                         # Optional: tissue/cell-type-specific notes
+├── raw/                              # Optional local pointers only; avoid committing large expression files
+├── processed/                        # Optional gene-covariate matrices or manifests
+├── results/                          # Optional MAGMA tissue/cell-type results; normally gitignored
+└── scripts/                          # Optional bridge scripts, if you prefer not to keep them at root
+```
+
+The root-level scripts currently included for this workflow are:
+
+#### `8a_prepare-celltype-gene-covar.R`
+
+Prepare a tissue/cell-type gene-property matrix for MAGMA `--gene-covar` analysis. The intended format is one row per gene and one numeric column per tissue/cell type, with a first gene identifier column compatible with the MAGMA `.genes.raw` file.
+
+#### `8b_run-MAGMA-celltype-gene-property.sh`
+
+Run MAGMA gene-property analysis using existing MAGMA gene-level results and a tissue/cell-type gene-covariate file.
+
+Conceptually, this performs:
+
+```text
+magma \
+  --gene-results <TRAIT>.genes.raw \
+  --gene-covar <tissue_or_celltype_gene_covar.tsv> \
+  --model direction-covar=greater condition-hide=Average \
+  --out <output_prefix>
+```
+
+#### `8c_extract-MAGMA-celltype-results.R`
+
+Extract and combine MAGMA tissue/cell-type gene-property results, including within-analysis multiple-testing correction.
+
+#### Optional bridge to PRSet tissue/cell-type scores
+
+A tissue/cell-type PRSet score requires a binary gene set. Therefore, continuous GTEx or cell-type specificity values must first be converted into gene sets, for example top 10% expressed/specific genes among tissues or cell types enriched for F4. Keep this analysis explicitly exploratory.
+
+If used, store the bridge script in one of these locations:
+
+```text
+tissue-cell-analyses/scripts/9_optional_tissue_celltype_PRSet_bridge.sh
+```
+
+or, if retaining the current root-level script convention:
+
+```text
+9_optional_tissue_celltype_PRSet_bridge.sh
+```
+
+Expected optional outputs include:
+
+```text
+tissue-cell-analyses/results/<TRAIT>_tissue_celltype_gene_property_results.tsv
+pathways/tissue/<TRAIT>_enriched_GTEx_v8_general_top10.gmt
+pathways/tissue/<TRAIT>_enriched_GTEx_v8_specific_top10.gmt
+pathways/celltype/<TRAIT>_enriched_<CTD>_top10.gmt
+pathways/<TRAIT>_enriched_tissue_celltype_top10.gmt
+```
+
+Do not interpret these optional top-decile PRSet scores as causal tissue or cell-type evidence. They are individual-level scores restricted to SNPs mapped to genes in threshold-defined tissue/cell-type gene sets.
+
 ## Auxiliary LDpred2 scripts and credit
 
 `A_ldpred2_auto_inf_qc_lift2_custom.R` and `B_subLDPred2.mcs.uclhg.sh` are auxiliary LDpred2 scripts adapted from Andrea G. Allegrini’s LDpred2 pipeline:
@@ -347,6 +507,48 @@ https://github.com/AndreAllegrini/LDpred2
 ```
 
 They have been modified for this project to improve compatibility with recent LDpred2-auto behaviour and to reduce errors in automated posterior-beta selection. Users should validate these scripts when changing GWAS inputs, target genotype data, LD references, genome builds, or software versions.
+
+## Minimal command order
+
+From the repository root, a typical pathway workflow is:
+
+```bash
+# 0. Optional: record software versions
+Rscript --vanilla 0d_record-software-versions.R
+
+# 1. Format summary statistics
+bash 0a_format-sumstats-ldpred2.sh
+bash 0b_format-sumstats-prsice-rsid.sh
+
+# 2. MAGMA gene-level and pathway analyses
+Rscript --vanilla 1_munge-sumstats-magma.R
+bash 2_create-annotation-file.sh
+bash 3_MAGMA-run-gene-level.sh
+Rscript --vanilla 4a_make-short-id-gmts.R
+bash 4b_run-MAGMA-pathways.sh
+
+# 3. Select pathways and make selected GMTs
+Rscript --vanilla 5a_extract-sig-pathways.R
+Rscript --vanilla 5b_check-selected-pathways.R
+Rscript --vanilla 6a_make-selected-pathway-gmt.R
+
+# 4. Create background and selected-pathway scores
+bash 6b_create-nonpathway-snp-list.sh
+bash 6c_score-nonpathway-PRSice.sh
+bash 6d_score-nonpathway-LDpred2.sh
+bash 7a_score-selected-pathways-PRSice.sh
+bash 7b_score-selected-pathways-LDpred2.sh
+```
+
+Optional tissue/cell-type workflow:
+
+```bash
+Rscript --vanilla 8a_prepare-celltype-gene-covar.R
+bash 8b_run-MAGMA-celltype-gene-property.sh
+Rscript --vanilla 8c_extract-MAGMA-celltype-results.R
+```
+
+Only run optional tissue/cell-type PRSet bridge scripts if a tissue/cell-type-derived GMT is explicitly needed.
 
 ## Quality-control checklist
 
@@ -374,6 +576,13 @@ For PRSice p1-only background files, expected columns are:
 FID IID <one score column>
 ```
 
+For optional tissue/cell-type analyses, additionally check:
+
+- The expression/specificity matrix gene IDs overlap adequately with the MAGMA `.genes.raw` gene IDs.
+- Tissue/cell-type resources have documented source, version, date, gene identifier type, and filtering.
+- Any top-decile or top-quantile threshold is recorded before making a PRSet GMT.
+- Tissue/cell-type PRSet scores are corrected as their own analysis family, not mixed with GO/Reactome pathway correction.
+
 ## Suggested Myriad setup
 
 Example R 4.5.1 setup:
@@ -383,6 +592,18 @@ module -f unload compilers mpi gcc-libs
 module load r/4.5.1-openblas/gnu-10.2.0
 unset R_LIBS
 export R_LIBS_USER="/myriadfs/home/<USER>/MyRLibs/R-4.5.1"
+```
+
+Example conda setup for optional MAGMA.Celltyping work:
+
+```bash
+module -f unload compilers mpi gcc-libs
+module load python/miniconda3/4.10.3
+source "$(conda info --base)/etc/profile.d/conda.sh"
+unset R_LIBS
+unset R_LIBS_USER
+unset R_LIBS_SITE
+conda activate /myriadfs/home/<USER>/conda/envs/magma_celltyping
 ```
 
 Example threading controls:
@@ -415,7 +636,19 @@ For each analysis run, record:
 - Selection threshold used for follow-up pathway scoring.
 - LDpred2 LD reference source and version/date.
 
-Use `docs/pathway_provenance_template.tsv` and `docs/file_manifest_template.tsv` as audit templates.
+For optional tissue/cell-type analyses, additionally record:
+
+- Tissue/cell-type database or reference name.
+- Version or release.
+- Download/access date.
+- Species and tissue/brain region.
+- Gene identifier type before and after mapping.
+- Whether values are mean expression, specificity, or another metric.
+- Cell-type level, if using a CellTypeDataset object.
+- Threshold used to define binary PRSet gene sets, if applicable.
+- Whether the analysis is confirmatory, sensitivity, or exploratory.
+
+Use `docs/pathway_provenance_template.tsv` and `docs/file_manifest_template.tsv` as audit templates if those files are added to the repository. If they are not present, create equivalent project-specific manifest files in `data/` using non-sensitive metadata only.
 
 ## References and resources
 
@@ -428,6 +661,8 @@ Use `docs/pathway_provenance_template.tsv` and `docs/file_manifest_template.tsv`
 - Privé F, Arbel J, Vilhjálmsson BJ. LDpred2: better, faster, stronger. *Bioinformatics*. 2021. DOI: 10.1093/bioinformatics/btaa1029.
 - LDpred2 HapMap3+ LD reference: https://figshare.com/articles/dataset/LD_reference_for_HapMap3_/21305061
 - MSigDB collections: https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+- MAGMA.Celltyping documentation: https://neurogenomics.github.io/MAGMA_Celltyping/
+- FUMA Downloads and tutorials: https://fuma.ctglab.nl/
 - GIANT BMI 2018 Zenodo record: https://zenodo.org/records/1251813
 - GIANT/Yengo 2022 height data: https://giant-consortium.web.broadinstitute.org/GIANT_consortium_data_files
 - Yengo L, et al. A saturated map of common genetic variants associated with human height. *Nature*. 2022. DOI: 10.1038/s41586-022-05275-y.

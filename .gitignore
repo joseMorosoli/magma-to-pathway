@@ -17,6 +17,8 @@
 *.tar.gz
 
 # Analysis outputs
+data/
+tissue-cell-analyses/
 SUMSTATS/
 sumstats/
 munged/
