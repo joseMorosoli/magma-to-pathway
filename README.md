@@ -8,7 +8,6 @@ This repository contains a reproducible workflow for moving from GWAS summary st
 4. PRSice/PRSet clumping-and-thresholding pathway scores.
 5. LDpred2 posterior-beta pathway scores.
 6. Genome-wide background scores excluding SNPs mapped to the selected pathway-gene set.
-7. Optional tissue/cell-type MAGMA gene-property analyses and optional tissue/cell-type-derived PRSet gene sets.
 
 The workflow was developed for use on the UCL Myriad high-performance computing environment, but the scripts are written as editable templates and can be adapted to other Unix-like systems.
 
@@ -57,9 +56,6 @@ magma-to-pathway/
 ├── 6d_score-nonpathway-LDpred2.sh
 ├── 7a_score-selected-pathways-PRSice.sh
 ├── 7b_score-selected-pathways-LDpred2.sh
-├── 8a_prepare-celltype-gene-covar.R
-├── 8b_run-MAGMA-celltype-gene-property.sh
-├── 8c_extract-MAGMA-celltype-results.R
 ├── A_ldpred2_auto_inf_qc_lift2_custom.R
 └── B_subLDPred2.mcs.uclhg.sh
 ```
