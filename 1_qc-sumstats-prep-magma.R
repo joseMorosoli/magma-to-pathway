@@ -1,11 +1,6 @@
-#!/usr/bin/env Rscript
 # ============================================================================
-# Script: 1_munge-sumstats-magma.R
+# Script: 1_qc-sumstats-prep-magma.R
 # Purpose: Create a MAGMA-ready summary-statistics file for one trait.
-#
-# Intended use:
-#   Run locally or on Myriad after creating an LDpred2-ready summary-statistics
-#   file with script 0. This script is deliberately one-trait-at-a-time.
 #
 # Required input:
 #   1. LDpred2-ready summary statistics with at least:
@@ -18,14 +13,28 @@
 # Output:
 #   A tab-delimited MAGMA-ready file containing at least:
 #        SNP P N
-#   Additional columns are retained for auditability.
+#   Additional columns are retained for safety checks
 #
-# Reproducibility notes:
-#   - The SNP column must match the second column of the reference .bim file.
-#   - Matching by CHR:BP assumes the summary statistics and .bim file use the
-#     same genome build. For this project, the MAGMA reference is GRCh37.
-#   - Do not commit munged summary statistics to GitHub.
 # ============================================================================
+
+module -f unload compilers mpi gcc-libs
+module load r/4.5.1-openblas/gnu-10.2.0
+
+unset R_LIBS
+export R_LIBS_USER="/myriadfs/home/ucju659/MyRLibs/R-4.5.1"
+
+export PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
+
+export SUMSTATS_FILE="/myriadfs/home/ucju659/SUMSTATS/ldpred2_ready/GIANT_UKBB_BMI_2018_ALL_SITES.test.ldpred2.gz"
+export BIM_FILE="${PROJECT_DIR}/g1000_eur/g1000_eur.bim"
+export OUT_FILE="${PROJECT_DIR}/munged/BMI_2018_ALL_SITES_MAGMA.test.txt"
+
+export TRAIT_LABEL="BMI_2018"
+export GENOME_BUILD="GRCh37"
+export GWAS_SOURCE="GIANT/Yengo 2018 BMI GWAS"
+export MIN_INFO="0.8"
+
+R --vanilla
 
 suppressPackageStartupMessages({
   library(data.table)
@@ -35,14 +44,35 @@ suppressPackageStartupMessages({
 # USER SETTINGS: edit these lines for each GWAS/trait.
 # ---------------------------------------------------------------------------
 
-# Example local Windows paths. Change these to your actual local or Myriad paths.
-SUMSTATS_FILE <- "C:/Users/Jose Morosoli/Documents/UCL/SUMSTATS/ldpred2_ready/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz"
-BIM_FILE      <- "C:/MAGMA/g1000_eur/g1000_eur.bim"
-OUT_FILE      <- "C:/MAGMA/munged/HT_EUR_2022_MAGMA.txt"
+PROJECT_DIR <- Sys.getenv(
+  "PROJECT_DIR",
+  unset = "/myriadfs/home/ucju659/SOFTWARE/MAGMA"
+)
 
-TRAIT_LABEL   <- "height_2022"
-GENOME_BUILD  <- "GRCh37"
-GWAS_SOURCE   <- "GIANT height 2022; replace with exact citation/download source"
+SUMSTATS_FILE <- Sys.getenv(
+  "SUMSTATS_FILE",
+  unset = "/myriadfs/home/ucju659/SUMSTATS/ldpred2_ready/GIANT_UKBB_BMI_2018_ALL_SITES.test.ldpred2.gz"
+)
+
+BIM_FILE <- Sys.getenv(
+  "BIM_FILE",
+  unset = file.path(PROJECT_DIR, "g1000_eur/g1000_eur.bim")
+)
+
+OUT_FILE <- Sys.getenv(
+  "OUT_FILE",
+  unset = file.path(PROJECT_DIR, "munged/BMI_2018_ALL_SITES_MAGMA.test.txt")
+)
+
+TRAIT_LABEL <- Sys.getenv("TRAIT_LABEL", unset = "BMI_2018")
+GENOME_BUILD <- Sys.getenv("GENOME_BUILD", unset = "GRCh37")
+
+GWAS_SOURCE <- Sys.getenv(
+  "GWAS_SOURCE",
+  unset = "GIANT BMI 2018"
+)
+
+MIN_INFO <- as.numeric(Sys.getenv("MIN_INFO", unset = "0.8"))
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -82,9 +112,22 @@ if (length(missing_cols) > 0) {
 
 bim <- fread(
   BIM_FILE,
-  col.names = c("CHR", "SNP", "CM", "BP", "A1_BIM", "A2_BIM"),
-  colClasses = list(character = c("SNP", "A1_BIM", "A2_BIM"))
+  header = FALSE,
+  colClasses = c(
+    "character",  # CHR
+    "character",  # SNP
+    "numeric",    # CM
+    "integer",    # BP
+    "character",  # A1_BIM
+    "character"   # A2_BIM
+  )
 )
+
+setnames(bim, c("CHR", "SNP", "CM", "BP", "A1_BIM", "A2_BIM"))
+
+bim[, CHR := gsub("^chr", "", CHR, ignore.case = TRUE)]
+bim[, CHR := as.integer(CHR)]
+bim[, BP := as.integer(BP)]
 
 # Keep one BIM SNP per physical position to avoid duplicate CHR:BP ambiguity.
 n_bim_before <- nrow(bim)
@@ -95,6 +138,9 @@ cat("Reference BIM variants after removing duplicated CHR:BP: ", nrow(bim), "\n"
 # ---------------------------------------------------------------------------
 # Basic QC
 # ---------------------------------------------------------------------------
+# Standardise chromosome labels.
+ss[, CHR := gsub("^chr", "", as.character(CHR), ignore.case = TRUE)]
+ss[, CHR := as.integer(CHR)]
 
 ss <- ss[CHR %in% 1:22]
 ss <- ss[!is.na(BP) & BP > 0]
@@ -106,6 +152,13 @@ ss[, A1 := toupper(A1)]
 ss[, A2 := toupper(A2)]
 ss <- ss[A1 %in% c("A", "C", "G", "T") & A2 %in% c("A", "C", "G", "T")]
 ss <- ss[A1 != A2]
+
+if ("INFO" %in% names(ss) && is.finite(MIN_INFO)) {
+  n_before_info <- nrow(ss)
+  ss <- ss[is.na(INFO) | INFO >= MIN_INFO]
+  cat("Rows after INFO filter INFO >= ", MIN_INFO, ": ",
+      nrow(ss), " / ", n_before_info, "\n", sep = "")
+}
 
 n_ss_after_qc <- nrow(ss)
 cat("Summary-statistic rows after basic QC: ", n_ss_after_qc, "\n", sep = "")
@@ -178,3 +231,9 @@ cat("Header:\n")
 print(names(out))
 cat("Preview:\n")
 print(head(out))
+q()
+
+# Compare against history of files
+zcat SUMSTATS/GIANT/BMI_GIANT_UKB_2018_all_sites.txt.gz | wc -l
+zcat SUMSTATS/ldpred2_ready/GIANT_UKBB_BMI_2018_ALL_SITES.test.ldpred2.gz | wc -l
+wc -l SOFTWARE/MAGMA/munged/BMI_2018_ALL_SITES_MAGMA.test.txt

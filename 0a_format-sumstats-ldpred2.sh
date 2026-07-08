@@ -1,4 +1,3 @@
-#!/bin/bash
 # ============================================================================
 # Script: 0_format-sumstats-ldpred2.sh
 # Purpose: Convert raw GWAS summary statistics to a simple LDpred2-ready format.
@@ -29,9 +28,6 @@
 #     interactive Myriad session, but it also means you must read the warnings.
 # ============================================================================
 
-set +e
-set -o pipefail
-
 # ---------------------------------------------------------------------------
 # Optional Myriad interactive session command. Run this in the terminal before
 # the script if the login node should not do the processing.
@@ -44,7 +40,7 @@ set -o pipefail
 
 IN="/myriadfs/home/ucju659/SUMSTATS/GIANT/BMI_GIANT_UKB_2018_all_sites.txt.gz"
 OUTDIR="/myriadfs/home/ucju659/SUMSTATS/ldpred2_ready"
-OUT="${OUTDIR}/GIANT_UKBB_BMI_2018_ALL_SITES.ldpred2.gz"
+OUT="${OUTDIR}/GIANT_UKBB_BMI_2018_ALL_SITES.test.ldpred2.gz"
 
 # Used only when no N column exists in the raw summary statistics.
 # Set to a real value, not a placeholder, before running such files.
@@ -52,7 +48,7 @@ N_GWAS="PUT_REAL_N_HERE"
 
 # Optional filters.
 MIN_MAF="0.01"
-MIN_INFO="NA"     # e.g. 0.6, or NA to skip INFO filtering here.
+MIN_INFO="0.8"     # e.g. 0.6, or NA to skip INFO filtering here.
 
 # ---------------------------------------------------------------------------
 # Checks
