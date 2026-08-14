@@ -1,50 +1,59 @@
 #!/bin/bash
 
 # ============================================================================
-# Format GWAS summary statistics for LDpred2 and PRSice
+# Format GWAS summary statistics for LDpred2 + PRSice/PRSet
 #
-# LDpred2 output:
-#   CHR BP A2 A1 N BETA SE MAF P INFO RSID
+# Output:
+#   RSID CHR BP A1 A2 N BETA SE MAF P INFO
 #
-# PRSice output:
-#   RSID CHR POS A1 A2 N BETA SE MAF P INFO
+# Handles the current project formats:
 #
-# Features:
-#   - Recognises multiple common names for the same column.
-#   - Automatically detects tab, comma, or whitespace delimiters.
-#   - Handles both:
-#         rs12345
-#         rs12345:A:G
-#   - Converts EAF to MAF when necessary.
-#   - Uses per-SNP N when available; otherwise N_GWAS.
-#   - Removes ambiguous A/T and C/G SNPs.
-#   - Removes duplicate rsIDs and duplicate positions.
+# Height:
+#   SNPID RSID CHR POS EFFECT_ALLELE OTHER_ALLELE
+#   EFFECT_ALLELE_FREQ BETA SE P N
+#
+# BMI:
+#   CHR POS SNP Tested_Allele Other_Allele Freq_Tested_Allele
+#   BETA SE P N INFO
+#   where SNP may look like rs140052487:C:A
+#
+# F4:
+#   SNP CHR BP MAF A1 A2 BETA SE P Q_P
+#   Requires N_GWAS because no per-SNP N is supplied.
+#
+# This formatter:
+#   - recognises alternative column names automatically
+#   - detects tab/comma/whitespace delimiter
+#   - retains/extracts genuine rsIDs
+#   - converts EAF to MAF when necessary
+#   - applies MAF and INFO QC when available
+#   - removes A/T and C/G variants
+#   - removes duplicate rsIDs and duplicate positions
+#
+# Intended for continuous-trait GWAS.
 # ============================================================================
 
 
 # ============================================================================
-# USER SETTINGS
+# 1. USER SETTINGS
 # Keep only ONE trait active
 # ============================================================================
 
 
 # ---- BMI --------------------------------------------------------------------
-# IN="/myriadfs/home/ucju659/SUMSTATS/GIANT/BMI_GIANT_UKB_2018_all_sites.txt.gz"
-# OUT_NAME="GIANT_UKBB_BMI_2018_ALL_SITES"
-# N_GWAS="NA"       # per-SNP N exists
-
+#IN="/myriadfs/home/ucju659/SUMSTATS/GIANT/BMI_GIANT_UKB_2018_all_sites.txt.gz"
+#OUT_NAME="GIANT_UKBB_BMI_2018_ALL_SITES"
+#N_GWAS="NA"       # per-SNP N exists
 
 # ---- Height -----------------------------------------------------------------
-
-IN="/myriadfs/home/ucju659/SUMSTATS/GIANT/GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz"
-OUT_NAME="GIANT_HEIGHT_YENGO_2022_EUR"
-N_GWAS="NA"         # per-SNP N exists
-
+#IN="/myriadfs/home/ucju659/SUMSTATS/GIANT/GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz"
+#OUT_NAME="GIANT_HEIGHT_YENGO_2022_EUR"
+#N_GWAS="NA"         # per-SNP N exists
 
 # ---- F4 ---------------------------------------------------------------------
-# IN="/myriadfs/home/ucju659/SUMSTATS/PFACTOR_2025/F4_Internalizing_2025.tsv"
-# OUT_NAME="F4_Internalizing_2025"
-# N_GWAS="1637337"
+IN="/myriadfs/home/ucju659/SUMSTATS/PFACTOR_2025/F4_Internalizing_2025.tsv"
+OUT_NAME="F4_Internalizing_2025"
+N_GWAS="1637337"
 
 
 # ============================================================================
@@ -53,8 +62,7 @@ N_GWAS="NA"         # per-SNP N exists
 
 OUTDIR="/myriadfs/home/ucju659/SUMSTATS/software-ready"
 
-OUT_LDPRED2="${OUTDIR}/${OUT_NAME}.ldpred2.tsv.gz"
-OUT_PRSICE="${OUTDIR}/${OUT_NAME}.prsice.tsv.gz"
+OUT="${OUTDIR}/${OUT_NAME}.cleaned.tsv.gz"
 
 MIN_MAF="0.01"
 MIN_INFO="0.8"
@@ -63,11 +71,10 @@ mkdir -p "$OUTDIR"
 
 
 # ============================================================================
-# Input checks
+# Check input and determine file type
 # ============================================================================
 
 CAN_RUN=true
-LDPRED2_OK=false
 
 if [[ ! -s "$IN" ]]; then
     echo "WARNING: input file not found or empty:"
@@ -76,7 +83,6 @@ if [[ ! -s "$IN" ]]; then
 fi
 
 
-# gzip or plain text
 if [[ "$IN" == *.gz ]]; then
     READCMD="zcat"
 else
@@ -93,32 +99,35 @@ if [[ "$CAN_RUN" == true ]]; then
     HEADER=$($READCMD "$IN" | head -1)
 
     if [[ "$HEADER" == *$'\t'* ]]; then
+
         AWK_FS='\t'
         echo "Detected delimiter: TAB"
 
     elif [[ "$HEADER" == *,* ]]; then
+
         AWK_FS=','
         echo "Detected delimiter: COMMA"
 
     else
+
         AWK_FS='[[:space:]]+'
         echo "Detected delimiter: WHITESPACE"
+
     fi
 fi
 
 
 # ============================================================================
-# 1. Raw summary statistics -> LDpred2
+# 2. Format summary statistics
 # ============================================================================
 
 if [[ "$CAN_RUN" == true ]]; then
 
     echo
-    echo "Input:          $IN"
-    echo "LDpred2 output: $OUT_LDPRED2"
-    echo "PRSice output:  $OUT_PRSICE"
+    echo "Input:  $IN"
+    echo "Output: $OUT"
 
-    TMP_LDPRED2="${OUT_LDPRED2}.tmp.$$"
+    TMP="${OUT}.tmp.$$"
 
 
     $READCMD "$IN" | awk \
@@ -134,12 +143,12 @@ if [[ "$CAN_RUN" == true ]]; then
 
     function clean(x) {
         gsub(/\r/, "", x)
-        gsub(/^ +| +$/, "", x)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", x)
         return x
     }
 
 
-    function findcol(names, n,i,a,key) {
+    function findcol(names, n, i, a, key) {
 
         n = split(names, a, "|")
 
@@ -155,6 +164,11 @@ if [[ "$CAN_RUN" == true ]]; then
     }
 
 
+    function missing_value(x) {
+    return (x == "" || x == "NA" || x == "NaN" || x == "NAN" || x == ".")
+}
+
+
     # ------------------------------------------------------------------------
     # Header
     # ------------------------------------------------------------------------
@@ -166,27 +180,35 @@ if [[ "$CAN_RUN" == true ]]; then
 
 
         # Variant identifier
+        # RSID is preferred when explicitly present.
         cRSID = findcol("RSID|RS_ID|RS_NUMBER|SNP|MARKERNAME|SNPID")
+
 
         # Chromosome / position
         cCHR = findcol("CHR|CHROM|CHROMOSOME")
         cBP  = findcol("BP|POS|POSITION|BASE_PAIR_LOCATION")
 
+
         # Alleles
         cA1 = findcol("A1|EFFECT_ALLELE|EA|ALLELE1|TESTED_ALLELE")
         cA2 = findcol("A2|OTHER_ALLELE|NON_EFFECT_ALLELE|NEA|ALLELE2")
+
 
         # Association statistics
         cBETA = findcol("BETA|EFFECT|B")
         cSE   = findcol("SE|STDERR|STANDARD_ERROR")
         cP    = findcol("P|PVAL|PVALUE|P_VALUE")
 
+
         # Sample size
         cN = findcol("N|TOTAL_N|NMISS|N_TOTAL")
 
+
         # Allele frequency
         cMAF = findcol("MAF|MINOR_ALLELE_FREQ|MINOR_ALLELE_FREQUENCY")
+
         cEAF = findcol("EAF|EAF_HRC|EFFECT_ALLELE_FREQ|EFFECT_ALLELE_FREQUENCY|AF1|FREQ_TESTED_ALLELE")
+
 
         # Imputation quality
         cINFO = findcol("INFO|INFO_SCORE|IMPINFO|RSQ")
@@ -207,8 +229,9 @@ if [[ "$CAN_RUN" == true ]]; then
         if (!cSE)   missing = missing " SE"
         if (!cP)    missing = missing " P"
 
+
         if (!cN && (N_FALLBACK == "" || N_FALLBACK == "NA" || N_FALLBACK == "PUT_REAL_F4_N_HERE"))
-            missing = missing " N"
+    missing = missing " N"
 
 
         if (missing != "") {
@@ -220,15 +243,15 @@ if [[ "$CAN_RUN" == true ]]; then
         }
 
 
-        print "CHR", "BP", "A2", "A1", "N", \
-              "BETA", "SE", "MAF", "P", "INFO", "RSID"
+        # Canonical output
+        print "RSID","CHR","BP","A1","A2","N","BETA","SE","MAF","P","INFO"
 
         next
     }
 
 
     # ------------------------------------------------------------------------
-    # Variants
+    # Data rows
     # ------------------------------------------------------------------------
 
     NR > 1 {
@@ -250,20 +273,24 @@ if [[ "$CAN_RUN" == true ]]; then
         p    = clean($cP)
 
 
-        # Remove chr prefix if present
+        # --------------------------------------------------------------------
+        # Chromosome
+        # ------------------------------------------------------------------------
+
         sub(/^[Cc][Hh][Rr]/, "", chr)
 
 
         # --------------------------------------------------------------------
         # rsID
         #
-        # Handles:
+        # Handles both:
         #   rs12345
         #   rs12345:A:G
-        # --------------------------------------------------------------------
+        # ------------------------------------------------------------------------
 
         if (rsid ~ /^rs[0-9]+:/)
             sub(/:.*/, "", rsid)
+
 
         if (rsid !~ /^rs[0-9]+$/)
             next
@@ -282,19 +309,20 @@ if [[ "$CAN_RUN" == true ]]; then
         # --------------------------------------------------------------------
         # MAF
         #
-        # Prefer MAF if supplied.
+        # Prefer supplied MAF.
         # Otherwise convert EAF -> MAF.
         # ------------------------------------------------------------------------
 
         maf = "NA"
 
-        if (cMAF && $cMAF != "" && $cMAF != "NA" && $cMAF != "NaN") {
 
-            maf = $cMAF + 0
+        if (cMAF && !missing_value(clean($cMAF))) {
 
-        } else if (cEAF && $cEAF != "" && $cEAF != "NA" && $cEAF != "NaN") {
+            maf = clean($cMAF) + 0
 
-            maf = $cEAF + 0
+        } else if (cEAF && !missing_value(clean($cEAF))) {
+
+            maf = clean($cEAF) + 0
         }
 
 
@@ -306,23 +334,29 @@ if [[ "$CAN_RUN" == true ]]; then
         # INFO
         # ------------------------------------------------------------------------
 
-        if (cINFO && $cINFO != "" && $cINFO != "NA" && $cINFO != "NaN")
-            info = $cINFO
+        if (cINFO && !missing_value(clean($cINFO)))
+            info = clean($cINFO)
         else
             info = "NA"
 
 
         # --------------------------------------------------------------------
-        # Basic QC
+        # Structural QC
         # ------------------------------------------------------------------------
 
         if (chr !~ /^[0-9]+$/ || chr < 1 || chr > 22)
             next
 
-        if (bp !~ /^[0-9]+$/)
+
+        if (bp !~ /^[0-9]+$/ || bp <= 0)
             next
 
-        if (a1 !~ /^[ACGT]$/ || a2 !~ /^[ACGT]$/ || a1 == a2)
+
+        if (a1 !~ /^[ACGT]$/ || a2 !~ /^[ACGT]$/)
+            next
+
+
+        if (a1 == a2)
             next
 
 
@@ -338,41 +372,47 @@ if [[ "$CAN_RUN" == true ]]; then
         # Numeric QC
         # ------------------------------------------------------------------------
 
-        if (n == "" || n == "NA" || n == "NaN" || n <= 0)
+        if (missing_value(n) || n <= 0)
             next
 
-        if (beta == "" || beta == "NA" || beta == "NaN")
+
+        if (missing_value(beta))
             next
 
-        if (se == "" || se == "NA" || se == "NaN" || se <= 0)
+
+        if (missing_value(se) || se <= 0)
             next
 
-        if (p == "" || p == "NA" || p == "NaN")
+
+        if (missing_value(p))
             next
+
 
         if (p <= 0)
             p = 1e-300
+
 
         if (p > 1)
             next
 
 
-        # MAF filter
-        if (maf != "NA" && maf < MIN_MAF)
+        # MAF QC when frequency exists
+        if (maf != "NA" && (maf < MIN_MAF || maf > 0.5))
             next
 
 
-        # INFO filter only when INFO exists
+        # INFO QC only when INFO exists
         if (MIN_INFO != "NA" && info != "NA" && info < MIN_INFO)
             next
 
 
         # --------------------------------------------------------------------
-        # Remove duplicate rsIDs and positions
+        # Remove duplicates
         # ------------------------------------------------------------------------
 
         if (seen_rsid[rsid]++)
             next
+
 
         poskey = chr ":" bp
 
@@ -381,167 +421,102 @@ if [[ "$CAN_RUN" == true ]]; then
 
 
         # --------------------------------------------------------------------
-        # LDpred2 output
+        # Output
         # ------------------------------------------------------------------------
 
-        print chr, bp, a2, a1, n, \
-              beta, se, maf, p, info, rsid
+        print rsid,chr,bp,a1,a2,n,beta,se,maf,p,info
     }
 
-    ' | gzip -c > "$TMP_LDPRED2"
+    ' | gzip -c > "$TMP"
 
 
     STATUS=("${PIPESTATUS[@]}")
 
 
     # ------------------------------------------------------------------------
-    # Check output
+    # Validate output
     # ------------------------------------------------------------------------
 
     if [[ "${STATUS[0]}" -eq 0 &&
           "${STATUS[1]}" -eq 0 &&
           "${STATUS[2]}" -eq 0 &&
-          -s "$TMP_LDPRED2" &&
-          "$(zcat "$TMP_LDPRED2" | head -2 | wc -l)" -ge 2 ]]; then
+          -s "$TMP" &&
+          "$(zcat "$TMP" | head -2 | wc -l)" -ge 2 ]]; then
 
-        mv "$TMP_LDPRED2" "$OUT_LDPRED2"
-
-        LDPRED2_OK=true
+        mv "$TMP" "$OUT"
 
         echo
-        echo "Created LDpred2 file:"
-        echo "$OUT_LDPRED2"
+        echo "Created cleaned summary statistics:"
+        echo "$OUT"
 
+        echo
         echo "Preview:"
-        zcat "$OUT_LDPRED2" | head
+        zcat "$OUT" | head
 
+        echo
         echo "Rows:"
-        zcat "$OUT_LDPRED2" | wc -l
+        zcat "$OUT" | wc -l
 
     else
 
-        echo "WARNING: LDpred2 formatting failed."
-        rm -f "$TMP_LDPRED2"
+        echo
+        echo "WARNING: summary-statistic formatting failed."
+
+        rm -f "$TMP"
     fi
 fi
 
 
 # ============================================================================
-# 2. LDpred2 -> PRSice
+# 3. BASIC CHECKS
 # ============================================================================
 
-if [[ "$LDPRED2_OK" == true ]]; then
+if [[ -s "$OUT" ]]; then
 
-    TMP_PRSICE="${OUT_PRSICE}.tmp.$$"
+    echo
+    echo "=== BASIC QC ==="
 
+    echo "Raw rows:"
+    $READCMD "$IN" | wc -l
 
-    zcat "$OUT_LDPRED2" | awk '
-
-    BEGIN {
-        OFS="\t"
-    }
-
-    NR == 1 {
-        print "RSID","CHR","POS","A1","A2","N","BETA","SE","MAF","P","INFO"
-        next
-    }
-
-    {
-        print $11,$1,$2,$4,$3,$5,$6,$7,$8,$9,$10
-    }
-
-    ' | gzip -c > "$TMP_PRSICE"
+    echo "Cleaned rows:"
+    zcat "$OUT" | wc -l
 
 
-    STATUS=("${PIPESTATUS[@]}")
+    echo "Bad rsIDs:"
+    zcat "$OUT" | awk '
+        NR > 1 && $1 !~ /^rs[0-9]+$/ {n++}
+        END {print n+0}
+    '
 
 
-    if [[ "${STATUS[0]}" -eq 0 &&
-          "${STATUS[1]}" -eq 0 &&
-          "${STATUS[2]}" -eq 0 &&
-          -s "$TMP_PRSICE" &&
-          "$(zcat "$TMP_PRSICE" | head -2 | wc -l)" -ge 2 ]]; then
+    echo "Duplicate rsIDs:"
+    zcat "$OUT" | awk '
+        NR > 1 {print $1}
+    ' | sort | uniq -d | wc -l
 
-        mv "$TMP_PRSICE" "$OUT_PRSICE"
-
-        echo
-        echo "Created PRSice file:"
-        echo "$OUT_PRSICE"
-
-        echo "Preview:"
-        zcat "$OUT_PRSICE" | head
-
-        echo "Rows:"
-        zcat "$OUT_PRSICE" | wc -l
-
-    else
-
-        echo "WARNING: PRSice conversion failed."
-        rm -f "$TMP_PRSICE"
-    fi
-
-else
-
-    echo "WARNING: PRSice conversion skipped because LDpred2 formatting failed."
 fi
 
-# ============================================================================
-# 3. CHECKS
-# ============================================================================
+zcat "$IN" | wc -l
+zcat "$OUT" | wc -l
 
+# How many raw variants have valid rsIDs?
+zcat "$IN" | awk -F'\t' 'NR>1 && $2 ~ /^rs[0-9]+$/ {n++} END{print n+0}'
 
-# ---- BMI --------------------------------------------------------------------
-# IN="/myriadfs/home/ucju659/SUMSTATS/GIANT/BMI_GIANT_UKB_2018_all_sites.txt.gz"
-# OUT_NAME="GIANT_UKBB_BMI_2018_ALL_SITES"
+# How many cleaned variants?
+zcat "$OUT" | awk 'NR>1 {n++} END{print n+0}'
 
+# Final check for the ambiguity filter:
 
-# ---- Height -----------------------------------------------------------------
+zcat "$IN" | awk -F'\t' '
+NR>1 {
+    a1=toupper($5); a2=toupper($6)
+    if ((a1=="A"&&a2=="T")||(a1=="T"&&a2=="A")||
+        (a1=="C"&&a2=="G")||(a1=="G"&&a2=="C")) n++
+}
+END{print "Ambiguous SNPs:",n+0}'
 
-IN="/myriadfs/home/ucju659/SUMSTATS/GIANT/GIANT_HEIGHT_YENGO_2022_GWAS_SUMMARY_STATS_EUR.gz"
-OUT_NAME="GIANT_HEIGHT_YENGO_2022_EUR"
-
-
-# ---- F4 ---------------------------------------------------------------------
-# IN="/myriadfs/home/ucju659/SUMSTATS/PFACTOR_2025/F4_Internalizing_2025.tsv"
-# OUT_NAME="F4_Internalizing_2025"
-
-
-OUTDIR="/myriadfs/home/ucju659/SUMSTATS/software-ready"
-
-LDPRED2="${OUTDIR}/${OUT_NAME}.ldpred2.tsv.gz"
-PRSICE="${OUTDIR}/${OUT_NAME}.prsice.tsv.gz"
-
-
-# gzip or plain-text input
-if [[ "$IN" == *.gz ]]; then
-    READCMD="zcat"
-else
-    READCMD="cat"
-fi
-
-
-echo "=== RAW INPUT ==="
-$READCMD "$IN" | head
-
-echo "=== LDPRED2 ==="
-zcat "$LDPRED2" | head
-
-echo "=== PRSICE ==="
-zcat "$PRSICE" | head
-
-echo "=== ROW COUNTS ==="
-$READCMD "$IN" | wc -l
-zcat "$LDPRED2" | wc -l
-zcat "$PRSICE" | wc -l
-
-echo "=== BAD rsIDs ==="
-zcat "$LDPRED2" | awk 'NR>1 && $11 !~ /^rs[0-9]+$/ {n++} END {print "LDpred2:", n+0}'
-zcat "$PRSICE"  | awk 'NR>1 && $1  !~ /^rs[0-9]+$/ {n++} END {print "PRSice:", n+0}'
-
-echo "=== DUPLICATE rsIDs ==="
-zcat "$LDPRED2" | awk 'NR>1 {print $11}' | sort | uniq -d | wc -l
-zcat "$PRSICE"  | awk 'NR>1 {print $1}'  | sort | uniq -d | wc -l
-
+# If the valid-rsID count is high and the ambiguity count accounts for much of the ~1.5 million additional loss, I would be comfortable with 6.6 million as the cleaned result.
 
 
 
