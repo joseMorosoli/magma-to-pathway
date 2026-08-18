@@ -47,13 +47,13 @@ TRAIT_PREFIX="F4_2025"
 # Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
 SELECTION="Bonferroni05"
 
-export BIGSNP_RDS="/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS/MCS_topmed_EUR_KING_QCd_rsID_PCs_SD4-hapmap-only.rds"
+export BIGSNP_RDS="/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS/MCS_topmed_EUR_KING_QCd_rsID_PCs_SD4-hapmap-only_GRCh37.rds"
 
 # Edit this for height/BMI.
 # Expected columns: chr pos a0 a1 beta, with or without a header.
-#export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz_17June2026/GIANT_HEIGHT_YENGO_2022_EUR.ldpred2.gz_final_beta_auto.txt"
-#export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GIANT_UKBB_BMI_2018_ALL_SITES.ldpred2.gz_17June2026/GIANT_UKBB_BMI_2018_ALL_SITES.ldpred2.gz_final_beta_auto.txt"
-export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/F4_Internalizing_2025.ldpred2.tsv.gz_24April2026/F4_Internalizing_2025.ldpred2.tsv.gz_final_beta_auto.txt"
+#export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GRCh37_GIANT_HEIGHT_YENGO_2022_EUR.cleaned.noINFO.tsv.gz_14August2026/GIANT_HEIGHT_YENGO_2022_EUR.cleaned.noINFO.tsv.gz_final_beta_auto.txt"
+#export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GIANT_UKBB_BMI_2018_ALL_SITES.cleaned.tsv.gz_15August2026/GRCh37_GIANT_UKBB_BMI_2018_ALL_SITES.cleaned.tsv.gz_final_beta_auto.txt"
+export RAW_BETAS="/myriadfs/home/ucju659/uclhg-mcs-pgs/GRCh37_F4_Internalizing_2025.cleaned.noINFO.tsv.gz_14August2026/F4_Internalizing_2025.cleaned.noINFO.tsv.gz_final_beta_auto.txt"
 
 export NONPATHWAY_EXTRACT="${PROJECT_DIR}/pathways/selected/${TRAIT_PREFIX}_selected_${SELECTION}_nonpathway/nonpathway_snps.extract.txt"
 
@@ -125,7 +125,7 @@ cat("Target SNPs in bigSNP:", nrow(map_small), "\n")
 cat("Extract-bigSNP rsID overlap:", length(intersect(extract_ids, map_small$rsid)), "\n")
 
 cat("Loading LDpred2 betas:\n", raw_betas, "\n", sep = "")
-first_line <- system2("bash", c("-lc", paste("zcat -f", shQuote(raw_betas), "| head -n 1")), stdout = TRUE)
+first_line <- readLines(raw_betas, n = 1)
 first_token <- strsplit(trimws(first_line[1]), "\\s+")[[1]][1]
 has_header <- grepl("[A-Za-z]", first_token)
 
