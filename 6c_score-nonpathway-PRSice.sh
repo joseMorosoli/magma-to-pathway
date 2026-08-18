@@ -35,23 +35,23 @@ PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 
 # Choose one trait.
 #TRAIT_PREFIX="HT_EUR_2022"
-#TRAIT_PREFIX="BMI_EUR_2018"
-TRAIT_PREFIX="F4_2025"
+TRAIT_PREFIX="BMI_EUR_2018"
+#TRAIT_PREFIX="F4_2025"
 
 # Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
 SELECTION="Bonferroni05"
 
 # Edit these base GWAS paths for height/BMI.
-# The base file must contain: MarkerName CHR POS A1 A2 BETA P
-# BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/GIANT_HEIGHT_YENGO_2022_EUR.rsID.prsice.tsv.gz"
-#BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/GIANT_UKBB_BMI_2018_ALL_SITES.rsID.prsice.tsv.gz"
-BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/F4_Internalizing_2025.rsID.prsice.tsv.gz"
+# The base file must contain: RSID CHR BP A1 A2 BETA P
+#BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/GIANT_HEIGHT_YENGO_2022_EUR.cleaned.noINFO.tsv.gz"
+BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/GIANT_UKBB_BMI_2018_ALL_SITES.cleaned.noINFO.tsv.gz" 
+#BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/F4_Internalizing_2025.cleaned.noINFO.tsv.gz"
 
 SOFTWARE="/myriadfs/home/ucju659/SOFTWARE/PRSice2"
 PRSICE_R="${SOFTWARE}/PRSice.R"
 PRSICE_BIN="${SOFTWARE}/PRSice_linux"
 
-TARGET_PLINK="/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS/MCS_topmed_EUR_KING_QCd_rsID_PCs_SD4-hapmap-only"
+TARGET_PLINK="/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS/MCS_topmed_EUR_KING_QCd_rsID_PCs_SD4-hapmap-only_GRCh37"
 
 NONPATHWAY_EXTRACT="${PROJECT_DIR}/pathways/selected/${TRAIT_PREFIX}_selected_${SELECTION}_nonpathway/nonpathway_snps.extract.txt"
 
@@ -93,9 +93,9 @@ else
     --base "${BASE}" \
     --target "${TARGET_PLINK}" \
     --extract "${NONPATHWAY_EXTRACT}" \
-    --snp MarkerName \
+    --snp RSID \
     --chr CHR \
-    --bp POS \
+    --bp BP \
     --A1 A1 \
     --A2 A2 \
     --stat BETA \
@@ -126,13 +126,11 @@ fi
 FILE="${OUT_PREFIX}.all_score"
 OUT="${OUT_PREFIX}.p1_only.all_score"
 
-echo
 echo "Checking PRSice non-pathway output for current trait"
 echo "Trait:        ${TRAIT_PREFIX}"
 echo "Selection:    ${SELECTION}"
 echo "All-score:    ${FILE}"
 echo "Slim output:  ${OUT}"
-echo
 
 if [[ ! -s "${FILE}" ]]; then
   echo "WARNING: .all_score file was not created or is empty:"
@@ -144,11 +142,9 @@ fi
 echo "Original .all_score size:"
 ls -lh "${FILE}"
 
-echo
 echo "Original .all_score dimensions:"
 awk 'NR == 1 {print "columns:", NF} END {print "rows:", NR}' "${FILE}"
 
-echo
 echo "Header fields:"
 awk '
 NR == 1 {
@@ -172,7 +168,6 @@ N_P1_COLS=$(
   ' "${FILE}"
 )
 
-echo
 echo "Total columns: ${N_COLS}"
 echo "Detected *_1 score columns: ${N_P1_COLS}"
 
@@ -213,10 +208,8 @@ else
   exit 0
 fi
 
-echo
 echo "Slim/copied non-pathway file:"
 ls -lh "${OUT}"
 
-echo
 echo "Slim/copied dimensions:"
 awk 'NR == 1 {print "columns:", NF} END {print "rows:", NR}' "${OUT}"
