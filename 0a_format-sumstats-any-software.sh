@@ -516,8 +516,17 @@ NR>1 {
 }
 END{print "Ambiguous SNPs:",n+0}'
 
-# If the valid-rsID count is high and the ambiguity count accounts for much of the ~1.5 million additional loss, I would be comfortable with 6.6 million as the cleaned result.
 
 
+
+# ============================================================================
+# 4. OPTIONAL:  Remove INFO column if it exists and contains no non-missing values
+# ============================================================================
+
+cd SUMSTATS/software-ready
+
+zcat GIANT_UKBB_BMI_2018_ALL_SITES.cleaned.tsv.gz \
+  | awk 'BEGIN{OFS="\t"} {NF--; print}' \
+  | gzip -c > GIANT_UKBB_BMI_2018_ALL_SITES.cleaned.noINFO.tsv.gz
 
 

@@ -35,8 +35,8 @@ PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 
 # Choose one trait.
 #TRAIT_PREFIX="HT_EUR_2022"
-TRAIT_PREFIX="BMI_EUR_2018"
-#TRAIT_PREFIX="F4_2025"
+#TRAIT_PREFIX="BMI_EUR_2018"
+TRAIT_PREFIX="F4_2025"
 
 # Common values: "FDR05", "Bonferroni05", "nominal_P05", "top50"
 SELECTION="Bonferroni05"
@@ -44,8 +44,8 @@ SELECTION="Bonferroni05"
 # Edit these base GWAS paths for height/BMI.
 # The base file must contain: RSID CHR BP A1 A2 BETA P
 #BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/GIANT_HEIGHT_YENGO_2022_EUR.cleaned.noINFO.tsv.gz"
-BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/GIANT_UKBB_BMI_2018_ALL_SITES.cleaned.noINFO.tsv.gz" 
-#BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/F4_Internalizing_2025.cleaned.noINFO.tsv.gz"
+#BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/GIANT_UKBB_BMI_2018_ALL_SITES.cleaned.noINFO.tsv.gz" 
+BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/F4_Internalizing_2025.cleaned.noINFO.tsv.gz"
 
 SOFTWARE="/myriadfs/home/ucju659/SOFTWARE/PRSice2"
 PRSICE_R="${SOFTWARE}/PRSice.R"
@@ -100,6 +100,7 @@ else
     --A2 A2 \
     --stat BETA \
     --pvalue P \
+    --base-info INFO:0.8 \
     --beta \
     --clump-kb 250 \
     --clump-r2 0.1 \
@@ -213,3 +214,4 @@ ls -lh "${OUT}"
 
 echo "Slim/copied dimensions:"
 awk 'NR == 1 {print "columns:", NF} END {print "rows:", NR}' "${OUT}"
+

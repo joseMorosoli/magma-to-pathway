@@ -49,16 +49,16 @@ SELECTION="Bonferroni05"
 SELECTED_GMT="${PROJECT_DIR}/pathways/selected/${TRAIT_PREFIX}_selected_${SELECTION}_GO_Reactome.symbols.gmt"
 
 # Edit these base GWAS paths for height/BMI.
-# The base file must contain: MarkerName CHR POS A1 A2 BETA P
-# BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/GIANT_HEIGHT_YENGO_2022_EUR.rsID.prsice.tsv.gz"
-#BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/GIANT_UKBB_BMI_2018_ALL_SITES.rsID.prsice.tsv.gz"
-BASE="/myriadfs/home/ucju659/SUMSTATS/prsice_ready/F4_Internalizing_2025.rsID.prsice.tsv.gz"
+# The base file must contain: RSID CHR BP A1 A2 BETA P
+#BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/GIANT_HEIGHT_YENGO_2022_EUR.cleaned.noINFO.tsv.gz"
+#BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/GIANT_UKBB_BMI_2018_ALL_SITES.cleaned.tsv.gz" 
+BASE="/myriadfs/home/ucju659/SUMSTATS/software-ready/F4_Internalizing_2025.cleaned.noINFO.tsv.gz"
 
 SOFTWARE="/myriadfs/home/ucju659/SOFTWARE/PRSice2"
 PRSICE_R="${SOFTWARE}/PRSice.R"
 PRSICE_BIN="${SOFTWARE}/PRSice_linux"
 
-TARGET_PLINK="/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS/MCS_topmed_EUR_KING_QCd_rsID_PCs_SD4-hapmap-only"
+TARGET_PLINK="/myriadfs/home/ucju659/REFERENCE/UCLhg/MCS/MCS_topmed_EUR_KING_QCd_rsID_PCs_SD4-hapmap-only_GRCh37"
 GTF="/myriadfs/home/ucju659/misc/ANNOTATIONS/gtf/Homo_sapiens.GRCh37.87.gtf"
 
 WIND5="35kb"
@@ -117,13 +117,13 @@ else
     --prsice "${PRSICE_BIN}" \
     --base "${BASE}" \
     --target "${TARGET_PLINK}" \
-    --snp MarkerName \
+    --snp RSID \
     --chr CHR \
-    --bp POS \
     --A1 A1 \
     --A2 A2 \
     --stat BETA \
     --pvalue P \
+    --base-info INFO:0.8 \
     --beta \
     --gtf "${GTF}" \
     --msigdb "${SELECTED_GMT}" \
@@ -271,4 +271,5 @@ fi
 echo "Completed selected-pathway PRSice scoring and p1-only slimming."
 echo "Use this file for trio merging:"
 echo "${OUT}"
+
 
