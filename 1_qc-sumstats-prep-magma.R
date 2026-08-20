@@ -18,22 +18,23 @@
 # ============================================================================
 
 module -f unload compilers mpi gcc-libs
-module load r/4.5.1-openblas/gnu-10.2.0
+module load r/recommended
+#module load r/4.5.1-openblas/gnu-10.2.0 # use this line if you want a specific library on Myriad
 
-unset R_LIBS
-export R_LIBS_USER="/myriadfs/home/ucju659/MyRLibs/R-4.5.1"
+# When you need to load your own personal R library, export it like this:
+#export R_LIBS_USER="/myriadfs/home/ucju659/MyRLibs/R-4.5.1"
 
-export PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA"
-
-export SUMSTATS_FILE="/myriadfs/home/ucju659/SUMSTATS/ldpred2_ready/GIANT_UKBB_BMI_2018_ALL_SITES.test.ldpred2.gz"
-export BIM_FILE="${PROJECT_DIR}/g1000_eur/g1000_eur.bim"
-export OUT_FILE="${PROJECT_DIR}/munged/BMI_2018_ALL_SITES_MAGMA.test.txt"
+export PROJECT_DIR="/myriadfs/home/ucju659/SOFTWARE/MAGMA" # this points to the location of your MAGMA installation (see install-MAGMA.sh)
 
 export TRAIT_LABEL="BMI_2018"
-export GENOME_BUILD="GRCh37"
 export GWAS_SOURCE="GIANT/Yengo 2018 BMI GWAS"
+export SUMSTATS_FILE="/myriadfs/home/ucju659/SUMSTATS/ldpred2_ready/GIANT_UKBB_BMI_2018_ALL_SITES.test.ldpred2.gz"
+export GENOME_BUILD="GRCh37"
+export BIM_FILE="${PROJECT_DIR}/g1000_eur/g1000_eur.bim"
+export OUT_FILE="${PROJECT_DIR}/munged/BMI_2018_ALL_SITES_MAGMA.test.txt"
 export MIN_INFO="0.8"
 
+# From this line onwards, we will be using R
 R --vanilla
 
 suppressPackageStartupMessages({
@@ -49,29 +50,12 @@ PROJECT_DIR <- Sys.getenv(
   unset = "/myriadfs/home/ucju659/SOFTWARE/MAGMA"
 )
 
-SUMSTATS_FILE <- Sys.getenv(
-  "SUMSTATS_FILE",
-  unset = "/myriadfs/home/ucju659/SUMSTATS/ldpred2_ready/GIANT_UKBB_BMI_2018_ALL_SITES.test.ldpred2.gz"
-)
-
-BIM_FILE <- Sys.getenv(
-  "BIM_FILE",
-  unset = file.path(PROJECT_DIR, "g1000_eur/g1000_eur.bim")
-)
-
-OUT_FILE <- Sys.getenv(
-  "OUT_FILE",
-  unset = file.path(PROJECT_DIR, "munged/BMI_2018_ALL_SITES_MAGMA.test.txt")
-)
-
-TRAIT_LABEL <- Sys.getenv("TRAIT_LABEL", unset = "BMI_2018")
+SUMSTATS_FILE <- Sys.getenv("SUMSTATS_FILE")
+BIM_FILE <- Sys.getenv("BIM_FILE")
+OUT_FILE <- Sys.getenv("OUT_FILE")
+TRAIT_LABEL <- Sys.getenv("TRAIT_LABEL")
 GENOME_BUILD <- Sys.getenv("GENOME_BUILD", unset = "GRCh37")
-
-GWAS_SOURCE <- Sys.getenv(
-  "GWAS_SOURCE",
-  unset = "GIANT BMI 2018"
-)
-
+GWAS_SOURCE <- Sys.getenv("GWAS_SOURCE")
 MIN_INFO <- as.numeric(Sys.getenv("MIN_INFO", unset = "0.8"))
 
 # ---------------------------------------------------------------------------
